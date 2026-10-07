@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>School Management System</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<section id="login">
+  <form id="loginForm" class="login-card" novalidate>
+    <div class="logo">SMS</div>
+    <h1>School Management System</h1>
+    <p class="sub">Sign in to continue</p>
+    <div id="loginErr" class="err" hidden></div>
+    <label>Username<input id="lu" autocomplete="username" placeholder="Enter username"></label>
+    <label>Password
+      <div class="pw"><input id="lp" type="password" autocomplete="current-password" placeholder="Enter password"><button type="button" id="togglePw">Show</button></div>
+    </label>
+    <button class="btn primary block">Login</button>
+    <p class="hint">Username: <b>admin</b> &nbsp;|&nbsp; Password: <b>admin123</b></p>
+    <p class="members">Project Members:<br>Shravani Pawar &amp; Tanvi Bahirwade</p>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <aside class="sidebar">
+    <div class="brand"><span class="logo sm">SMS</span><span>School Management System</span></div>
+    <nav class="nav">
+      <a href="#dashboard" data-p="dashboard">Dashboard</a>
+      <a href="#students" data-p="students">Students</a>
+      <a href="#teachers" data-p="teachers">Teachers</a>
+      <a href="#classes" data-p="classes">Classes</a>
+      <a href="#attendance" data-p="attendance">Attendance</a>
+      <a href="#fees" data-p="fees">Fees</a>
+      <a href="#results" data-p="results">Results</a>
+      <a href="#reports" data-p="reports">Reports</a>
+      <button id="logout" type="button">Logout</button>
+    </nav>
+    <div class="side-foot">Project Members:<br>Shravani Pawar &amp; Tanvi Bahirwade</div>
+  </aside>
+  <div id="overlay"></div>
+  <div class="main">
+    <header class="topbar">
+      <button id="menuBtn" aria-label="Menu">&#9776;</button>
+      <h2 id="pageTitle"></h2>
+      <span class="user">Admin</span>
+    </header>
+    <main id="view"></main>
+  </div>
+</div>
+
+<div id="modal" class="modal" hidden>
+  <div class="mbox">
+    <div class="mhead"><h3 id="mTitle"></h3><button id="mClose" aria-label="Close">&times;</button></div>
+    <div id="mBody"></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
