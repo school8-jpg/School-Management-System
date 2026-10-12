@@ -1,181 +1,1431 @@
-'use strict';
-const $=(s,e=document)=>e.querySelector(s),$$=(s,e=document)=>[...e.querySelectorAll(s)];
-const load=(k,d)=>{try{const v=JSON.parse(localStorage.getItem('sms_'+k));return v==null?d:v}catch{return d}};
-const save=(k,v)=>localStorage.setItem('sms_'+k,JSON.stringify(v));
-const D={students:load('students',[]),teachers:load('teachers',[]),classes:load('classes',[]),fees:load('fees',[]),results:load('results',[]),attendance:load('attendance',{})};
-const persist=k=>save(k,D[k]);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const money=n=>'\u20B9'+(+n||0).toLocaleString('en-IN');
-const sum=(a,k)=>a.reduce((t,r)=>t+(+r[k]||0),0);
-const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-const today=()=>{const d=new Date();return new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10)};
-const cl=c=>c.name+' - '+c.section;
-const tName=id=>(D.teachers.find(t=>t.tid===id)||{}).name||'\u2014';
-const grade=p=>p>=90?'A+':p>=80?'A':p>=70?'B+':p>=60?'B':p>=50?'C':p>=40?'D':'F';
-const bc=v=>({Paid:'ok',Partial:'warn',Pending:'er','A+':'ok',A:'ok','B+':'info',B:'info',C:'warn',D:'warn',F:'er'}[v]||'');
-let q='',cf='',pending=null;
+/* =====================================================
+   SCHOOL MANAGEMENT SYSTEM
+   Project Members: Shravani Pawar & Tanvi Bahirwade
+   HTML + CSS + Vanilla JavaScript + LocalStorage
+===================================================== */
 
-function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2600)}
-function openModal(t,h){$('#mTitle').textContent=t;$('#mBody').innerHTML=h;$('#modal').hidden=false}
-function closeModal(){$('#modal').hidden=true;$('#mBody').innerHTML=''}
-function confirmBox(msg,fn){openModal('Confirm Delete',`<p>${esc(msg)}</p><div class="actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn danger" id="yes">Delete</button></div>`);$('#yes').onclick=()=>{closeModal();fn()}}
+"use strict";
 
-/* ---------- Module configuration ---------- */
-const fill=d=>{const s=D.students.find(x=>x.sid===d.sid);d.name=s?s.name:'';d.cls=s?s.cls:''};
-const stuOpts=()=>D.students.map(s=>[s.sid,s.sid+' - '+s.name]);
-const marks=[1,2,3,4,5].map(i=>({k:'m'+i,s:'Sub '+i,l:'Subject '+i+' Marks (max 100)',type:'number',req:1,max:100}));
-const M={
- students:{t:'Student',f:[
-  {k:'sid',l:'Student ID',req:1,lock:1},{k:'name',l:'Student Name',req:1},
-  {k:'gender',l:'Gender',type:'select',req:1,o:()=>['Male','Female','Other']},
-  {k:'dob',l:'Date of Birth',type:'date',req:1},
-  {k:'cls',l:'Class',type:'select',req:1,o:()=>D.classes.map(cl)},
-  {k:'email',l:'Email',type:'email',req:1},{k:'phone',l:'Contact Number',type:'tel',req:1}],
-  u:['sid'],um:'Student ID already exists.',
-  after:r=>{['fees','results'].forEach(k=>{D[k].forEach(x=>{if(x.sid===r.sid){x.name=r.name;x.cls=r.cls}});persist(k)})}},
- teachers:{t:'Teacher',f:[
-  {k:'tid',l:'Teacher ID',req:1,lock:1},{k:'name',l:'Teacher Name',req:1},
-  {k:'gender',l:'Gender',type:'select',req:1,o:()=>['Male','Female','Other']},
-  {k:'subject',l:'Subject',req:1},{k:'email',l:'Email',type:'email',req:1},{k:'phone',l:'Contact Number',type:'tel',req:1}],
-  u:['tid'],um:'Teacher ID already exists.'},
- classes:{t:'Class',f:[
-  {k:'name',l:'Class Name',req:1,lock:1},{k:'section',l:'Section',req:1,lock:1},
-  {k:'teacher',l:'Class Teacher',type:'select',o:()=>D.teachers.map(t=>[t.tid,t.name]),show:tName},
-  {k:'room',l:'Room Number',req:1}],
-  u:['name','section'],um:'This class and section already exist.',
-  x:{l:'Students',v:r=>D.students.filter(s=>s.cls===cl(r)).length}},
- fees:{t:'Fee Record',f:[
-  {k:'sid',l:'Student ID',type:'select',req:1,o:stuOpts,lock:1},{k:'name',l:'Student Name',ro:1},{k:'cls',l:'Class',ro:1},
-  {k:'total',l:'Total Fees (\u20B9)',s:'Total Fees',type:'number',req:1,m:1},
-  {k:'paid',l:'Paid Amount (\u20B9)',s:'Paid',type:'number',req:1,m:1},
-  {k:'rem',l:'Remaining Amount (\u20B9)',s:'Remaining',ro:1,m:1},
-  {k:'status',l:'Payment Status',s:'Status',ro:1},{k:'date',l:'Payment Date',type:'date'}],
-  u:['sid'],um:'A fee record already exists for this student. Edit it instead.',
-  calc:d=>{fill(d);const t=+d.total||0,p=+d.paid||0;d.rem=Math.max(t-p,0);d.status=t>0&&p>=t?'Paid':p>0?'Partial':'Pending'}},
- results:{t:'Result',f:[
-  {k:'sid',l:'Student ID',type:'select',req:1,o:stuOpts,lock:1},{k:'name',l:'Student Name',ro:1},{k:'cls',l:'Class',ro:1},
-  ...marks,{k:'total',l:'Total Marks',s:'Total',ro:1},{k:'pct',l:'Percentage',s:'%',ro:1},{k:'grade',l:'Grade',ro:1}],
-  u:['sid'],um:'A result already exists for this student. Edit it instead.',
-  calc:d=>{fill(d);d.total=[1,2,3,4,5].reduce((a,i)=>a+(+d['m'+i]||0),0);d.pct=+(d.total/5).toFixed(2);d.grade=grade(d.pct)}}
+/* ==================== HELPERS ==================== */
+
+const $ = (selector, root = document) => root.querySelector(selector);
+
+const $$ = (selector, root = document) =>
+  Array.from(root.querySelectorAll(selector));
+
+const escapeHTML = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+const uid = (prefix = "REC") =>
+  `${prefix}-${Date.now().toString(36)}-${Math.random()
+    .toString(36).slice(2, 7)}`;
+
+const money = (value) =>
+  "₹" + Number(value || 0).toLocaleString("en-IN", {
+    maximumFractionDigits: 2
+  });
+
+const number = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 };
 
-/* ---------- Auth ---------- */
-const authed=()=>load('auth',false);
-function showApp(){const a=authed();$('#login').hidden=a;$('#app').hidden=!a;if(a)route()}
-$('#loginForm').onsubmit=e=>{e.preventDefault();const u=$('#lu').value.trim(),p=$('#lp').value,er=$('#loginErr');
- if(!u||!p){er.textContent='Please enter both username and password.';er.hidden=false;return}
- if(u==='admin'&&p==='admin123'){er.hidden=true;save('auth',true);$('#lp').value='';location.hash='dashboard';showApp()}
- else{er.textContent='Invalid username or password.';er.hidden=false}};
-$('#togglePw').onclick=()=>{const i=$('#lp'),s=i.type==='password';i.type=s?'text':'password';$('#togglePw').textContent=s?'Hide':'Show'};
-$('#logout').onclick=()=>{save('auth',false);history.replaceState(null,'',location.pathname);closeSide();showApp()};
-
-/* ---------- Router / layout ---------- */
-const PAGES=['dashboard','students','teachers','classes','attendance','fees','results','reports'];
-function closeSide(){document.body.classList.remove('side-open')}
-$('#menuBtn').onclick=()=>document.body.classList.toggle('side-open');
-$('#overlay').onclick=closeSide;
-$('#mClose').onclick=closeModal;
-$('#modal').onclick=e=>{if(e.target.id==='modal')closeModal()};
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
-addEventListener('hashchange',()=>authed()&&route());
-function route(){let p=location.hash.slice(1);if(!PAGES.includes(p))p='dashboard';q='';cf='';
- $$('.nav a').forEach(a=>a.classList.toggle('active',a.dataset.p===p));
- $('#pageTitle').textContent=p[0].toUpperCase()+p.slice(1);closeSide();R[p]();scrollTo(0,0);
- if(pending){const f=pending;pending=null;f()}}
-function quick(p,fn){pending=fn;if(location.hash.slice(1)===p)route();else location.hash=p}
-
-/* ---------- Generic list / CRUD ---------- */
-function cellHtml(f,r){const raw=r[f.k];let v=f.show?f.show(raw):f.m?money(raw):f.k==='pct'?raw+'%':(raw===''||raw==null?'\u2014':raw);
- v=esc(v);return(f.k==='status'||f.k==='grade')?`<span class="badge ${bc(raw)}">${v}</span>`:v}
-function list(mod){const m=M[mod];
- $('#view').innerHTML=`<div class="bar no-print"><input id="q" class="search" placeholder="Search ${m.t.toLowerCase()}s..." autocomplete="off">${mod==='students'?`<select id="cf"><option value="">All Classes</option>${D.classes.map(c=>`<option>${esc(cl(c))}</option>`).join('')}</select>`:''}<button class="btn primary" onclick="addRec('${mod}')">+ Add ${m.t}</button></div>
- <div class="card tbl"><table><thead><tr>${m.f.map(f=>`<th>${f.s||f.l}</th>`).join('')}${m.x?`<th>${m.x.l}</th>`:''}<th>Actions</th></tr></thead><tbody id="tb"></tbody></table></div>`;
- $('#q').oninput=e=>{q=e.target.value;rows(mod)};
- if($('#cf'))$('#cf').onchange=e=>{cf=e.target.value;rows(mod)};
- rows(mod)}
-function rows(mod){const m=M[mod],s=q.trim().toLowerCase();
- const a=D[mod].filter(r=>(!cf||r.cls===cf)&&(!s||m.f.some(f=>String(f.show?f.show(r[f.k]):r[f.k]??'').toLowerCase().includes(s))));
- $('#tb').innerHTML=a.length?a.map(r=>`<tr>${m.f.map(f=>`<td>${cellHtml(f,r)}</td>`).join('')}${m.x?`<td>${m.x.v(r)}</td>`:''}<td class="act"><button class="lnk" onclick="viewRec('${mod}','${r._id}')">View</button><button class="lnk" onclick="editRec('${mod}','${r._id}')">Edit</button><button class="lnk d" onclick="delRec('${mod}','${r._id}')">Delete</button></td></tr>`).join(''):'<tr><td colspan="99" class="empty">No records found</td></tr>'}
-const find=(mod,id)=>D[mod].find(r=>r._id===id);
-function addRec(mod){
- if(mod==='students'&&!D.classes.length)return toast('Please add a class first.');
- if((mod==='fees'||mod==='results')&&!D.students.length)return toast('Please add a student first.');
- formModal(mod)}
-function editRec(mod,id){formModal(mod,find(mod,id))}
-function viewRec(mod,id){const m=M[mod],r=find(mod,id);
- openModal(m.t+' Details','<dl class="dl">'+m.f.map(f=>`<div><dt>${f.l}</dt><dd>${cellHtml(f,r)}</dd></div>`).join('')+(m.x?`<div><dt>${m.x.l}</dt><dd>${m.x.v(r)}</dd></div>`:'')+'</dl><div class="actions"><button class="btn" onclick="closeModal()">Close</button></div>')}
-function delRec(mod,id){const r=find(mod,id);
- if(mod==='classes'&&D.students.some(s=>s.cls===cl(r)))return toast('Cannot delete: students are assigned to this class.');
- confirmBox(`Are you sure you want to delete this ${M[mod].t.toLowerCase()}? This cannot be undone.`,()=>{
-  D[mod]=D[mod].filter(x=>x._id!==id);persist(mod);
-  if(mod==='students'){['fees','results'].forEach(k=>{D[k]=D[k].filter(x=>x.sid!==r.sid);persist(k)});Object.values(D.attendance).forEach(o=>delete o[r.sid]);persist('attendance')}
-  if(mod==='teachers'){D.classes.forEach(c=>{if(c.teacher===r.tid)c.teacher=''});persist('classes')}
-  toast('Deleted successfully.');list(mod)})}
-
-function formModal(mod,rec){const m=M[mod],d=rec||{};
- const fs=m.f.map(f=>{const v=d[f.k]??'',lock=f.ro||(f.lock&&rec);let inp;
-  if(f.type==='select'){const dis=lock?' style="pointer-events:none;background:#eef0f8"':'';
-   inp=`<select name="${f.k}"${dis}><option value="">Select</option>${f.o().map(o=>{const[a,b]=Array.isArray(o)?o:[o,o];return`<option value="${esc(a)}"${a===v?' selected':''}>${esc(b)}</option>`}).join('')}</select>`}
-  else inp=`<input name="${f.k}" type="${f.type||'text'}" value="${esc(v)}"${lock?' readonly tabindex="-1"':''}${f.type==='number'?` min="0"${f.max?` max="${f.max}"`:''} step="any"`:''}>`;
-  return`<label>${f.l}${f.req?' *':''}${inp}</label>`}).join('');
- openModal((rec?'Edit ':'Add ')+m.t,`<form id="f" novalidate><div id="ferr" class="err" hidden></div><div class="grid">${fs}</div><div class="actions"><button type="button" class="btn" onclick="closeModal()">Cancel</button><button class="btn primary">${rec?'Update':'Save'}</button></div></form>`);
- const F=$('#f'),read=()=>Object.fromEntries(new FormData(F));
- if(m.calc){const upd=()=>{const x=read();m.calc(x);m.f.filter(f=>f.ro).forEach(f=>F.elements[f.k].value=x[f.k]??'')};F.addEventListener('input',upd);F.addEventListener('change',upd);upd()}
- F.onsubmit=e=>{e.preventDefault();const x=read();Object.keys(x).forEach(k=>x[k]=String(x[k]).trim());
-  const err=validate(mod,x,rec);if(err){const b=$('#ferr');b.textContent=err;b.hidden=false;b.scrollIntoView({block:'nearest'});return}
-  m.calc&&m.calc(x);m.f.forEach(f=>{if(f.type==='number')x[f.k]=+x[f.k]});
-  let r;if(rec){Object.assign(rec,x);r=rec}else{r={_id:uid(),...x};D[mod].push(r)}
-  persist(mod);m.after&&m.after(r);closeModal();toast(rec?'Updated successfully.':'Added successfully.');list(mod)}}
-
-function validate(mod,x,rec){const m=M[mod];
- for(const f of m.f){if(f.ro)continue;const v=x[f.k]||'';
-  if(f.req&&!v)return f.l.replace(/ \(.*\)/,'')+' is required.';
-  if(!v)continue;
-  if(f.type==='email'&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))return'Please enter a valid email address.';
-  if(f.type==='tel'&&!/^\d{10}$/.test(v))return'Contact number must be exactly 10 digits.';
-  if(f.type==='number'){const n=+v;if(isNaN(n)||n<0)return f.l+' must be a valid non-negative number.';if(f.max&&n>f.max)return f.l.replace(/ \(.*\)/,'')+' cannot exceed '+f.max+'.'}}
- if(m.u&&D[mod].some(r=>(!rec||r._id!==rec._id)&&m.u.every(k=>String(r[k]).toLowerCase()===String(x[k]).toLowerCase())))return m.um;
- if(mod==='fees'){if(+x.paid>+x.total)return'Paid amount cannot be greater than total fees.';if(+x.paid>0&&!x.date)return'Payment date is required when an amount is paid.'}
- return''}
-
-/* ---------- Attendance ---------- */
-function attStats(c){let p=0,a=0,l=0;for(const k in D.attendance){if(c&&k.split('|')[1]!==c)continue;for(const s in D.attendance[k]){const v=D.attendance[k][s];v==='Present'?p++:v==='Absent'?a++:l++}}const t=p+a+l;return{p,a,l,t,pct:t?Math.round((p+l)/t*100):0}}
-function stuPct(sid){let g=0,t=0;for(const k in D.attendance){const v=D.attendance[k][sid];if(v){t++;if(v!=='Absent')g++}}return t?Math.round(g/t*100)+'%':'\u2014'}
-let att={};
-function attPage(){
- $('#view').innerHTML=`<div class="bar no-print"><label class="inl">Date<input type="date" id="ad" value="${today()}"></label><label class="inl">Class<select id="ac"><option value="">Select class</option>${D.classes.map(c=>`<option>${esc(cl(c))}</option>`).join('')}</select></label></div><div id="aBody"></div>`;
- $('#ad').onchange=$('#ac').onchange=attDraw;attDraw()}
-function attDraw(){const d=$('#ad').value,c=$('#ac').value,B=$('#aBody');
- if(!d||!c){B.innerHTML='<div class="card empty">Select a date and a class to mark attendance.</div>';return}
- const ss=D.students.filter(s=>s.cls===c);
- if(!ss.length){B.innerHTML='<div class="card empty">No students found in this class.</div>';return}
- const saved=D.attendance[d+'|'+c];att={};ss.forEach(s=>att[s.sid]=(saved&&saved[s.sid])||'Present');
- B.innerHTML=`<div class="card"><div class="bar2"><span id="aSum"></span><span class="badge ${saved?'ok':'warn'}">${saved?'Saved':'Not saved'}</span><span class="sp"></span><button class="btn" onclick="attAll('Present')">Mark all Present</button><button class="btn" onclick="attAll('Absent')">Mark all Absent</button><button class="btn primary" onclick="attSave()">${saved?'Update':'Save'} Attendance</button></div>
- <div class="tbl"><table><thead><tr><th>#</th><th>Student ID</th><th>Name</th><th>Status</th><th>Overall %</th></tr></thead><tbody>${ss.map((s,i)=>`<tr><td>${i+1}</td><td>${esc(s.sid)}</td><td>${esc(s.name)}</td><td>${['Present','Absent','Late'].map(v=>`<label class="rb"><input type="radio" name="r${i}" value="${v}" data-s="${esc(s.sid)}"${att[s.sid]===v?' checked':''}>${v}</label>`).join('')}</td><td>${stuPct(s.sid)}</td></tr>`).join('')}</tbody></table></div>
- <p class="note">Attendance % = (Present + Late) \u00F7 Total students.</p></div>`;
- B.onchange=e=>{if(e.target.type==='radio'){att[e.target.dataset.s]=e.target.value;attSum()}};attSum()}
-function attSum(){const v=Object.values(att),p=v.filter(x=>x==='Present').length,a=v.filter(x=>x==='Absent').length,l=v.length-p-a;
- $('#aSum').innerHTML=`<b>Present:</b> ${p} &nbsp; <b>Absent:</b> ${a} &nbsp; <b>Late:</b> ${l} &nbsp; <b>Attendance:</b> ${v.length?Math.round((p+l)/v.length*100):0}%`}
-function attAll(v){for(const k in att)att[k]=v;$$('#aBody input[type=radio]').forEach(r=>r.checked=r.value===v);attSum()}
-function attSave(){const d=$('#ad').value,c=$('#ac').value;D.attendance[d+'|'+c]={...att};persist('attendance');toast('Attendance saved.');attDraw()}
-
-/* ---------- Pages ---------- */
-const statCard=(l,v,s)=>`<div class="stat"><span>${l}</span><b>${v}</b>${s?`<small>${s}</small>`:''}</div>`;
-const tableHtml=(h,r)=>`<div class="card tbl"><table><thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${r.length?r.map(x=>`<tr>${x.map(c=>`<td>${c}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${h.length}" class="empty">No data available</td></tr>`}</tbody></table></div>`;
-const R={
- dashboard(){const a=attStats();
-  $('#view').innerHTML=`<div class="stats">${statCard('Total Students',D.students.length)}${statCard('Total Teachers',D.teachers.length)}${statCard('Total Classes',D.classes.length)}${statCard('Attendance',a.pct+'%',`Present ${a.p} \u00B7 Absent ${a.a} \u00B7 Late ${a.l}`)}${statCard('Total Fees',money(sum(D.fees,'total')))}${statCard('Pending Fees',money(sum(D.fees,'rem')))}</div>
-  <h3 class="sec">Quick Actions</h3><div class="qa"><button class="btn primary" onclick="quick('students',()=>addRec('students'))">Add Student</button><button class="btn primary" onclick="quick('teachers',()=>addRec('teachers'))">Add Teacher</button><button class="btn primary" onclick="location.hash='attendance'">Mark Attendance</button><button class="btn primary" onclick="quick('fees',()=>addRec('fees'))">Add Fees</button><button class="btn primary" onclick="quick('results',()=>addRec('results'))">Add Result</button></div>`},
- students(){list('students')},teachers(){list('teachers')},classes(){list('classes')},fees(){list('fees')},results(){list('results')},
- attendance:attPage,
- reports(){const a=attStats(),av=D.results.length?(sum(D.results,'pct')/D.results.length).toFixed(2)+'%':'0%';
-  $('#view').innerHTML=`<div class="bar no-print"><button class="btn primary" onclick="window.print()">Print Report</button></div>
-  <h2 class="ptitle">School Management System \u2013 Report (${new Date().toLocaleDateString('en-IN')})</h2>
-  <h3 class="sec">Summary Statistics</h3><div class="stats">${statCard('Students',D.students.length)}${statCard('Teachers',D.teachers.length)}${statCard('Classes',D.classes.length)}${statCard('Attendance',a.pct+'%')}${statCard('Total Fees',money(sum(D.fees,'total')))}${statCard('Fees Collected',money(sum(D.fees,'paid')))}${statCard('Pending Fees',money(sum(D.fees,'rem')))}${statCard('Average Result',av)}</div>
-  <h3 class="sec">Student Report</h3>${tableHtml(['ID','Name','Gender','Class','Email','Contact'],D.students.map(s=>[s.sid,s.name,s.gender,s.cls,s.email,s.phone].map(esc)))}
-  <h3 class="sec">Teacher Report</h3>${tableHtml(['ID','Name','Gender','Subject','Email','Contact'],D.teachers.map(s=>[s.tid,s.name,s.gender,s.subject,s.email,s.phone].map(esc)))}
-  <h3 class="sec">Attendance Report</h3>${tableHtml(['Class','Students','Present','Absent','Late','Attendance %'],D.classes.map(c=>{const n=cl(c),s=attStats(n);return[esc(n),D.students.filter(x=>x.cls===n).length,s.p,s.a,s.l,s.pct+'%']}))}
-  <h3 class="sec">Fees Report</h3>${tableHtml(['Student ID','Name','Class','Total','Paid','Remaining','Status'],D.fees.map(f=>[esc(f.sid),esc(f.name),esc(f.cls),money(f.total),money(f.paid),money(f.rem),`<span class="badge ${bc(f.status)}">${f.status}</span>`]))}
-  <h3 class="sec">Results Report</h3>${tableHtml(['Student ID','Name','Class','Total','Percentage','Grade'],D.results.map(r=>[esc(r.sid),esc(r.name),esc(r.cls),r.total+' / 500',r.pct+'%',`<span class="badge ${bc(r.grade)}">${r.grade}</span>`]))}`}
+const getStore = (key, fallback = []) => {
+  try {
+    const value = JSON.parse(localStorage.getItem("sms_" + key));
+    return value ?? fallback;
+  } catch {
+    return fallback;
+  }
 };
-showApp();
+
+const setStore = (key, value) => {
+  localStorage.setItem("sms_" + key, JSON.stringify(value));
+};
+
+function notify(message) {
+  const toast = $("#toast");
+  if (!toast) return;
+
+  toast.textContent = message;
+  toast.classList.add("show");
+
+  clearTimeout(notify.timer);
+  notify.timer = setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2800);
+}
+
+function makeId(prefix) {
+  return uid(prefix);
+}
+
+function setTitle(title) {
+  const el = $("#pageTitle");
+  if (el) el.textContent = title;
+}
+
+function emptyMessage(message) {
+  return `<div class="empty-state"><div class="empty-icon">📂</div>
+    <h3>${escapeHTML(message)}</h3>
+    <p>Use the Add button to create a new record.</p></div>`;
+}
+
+function button(label, action, extraClass = "secondary") {
+  return `<button type="button" class="btn ${extraClass}"
+    data-action="${escapeHTML(action)}">${escapeHTML(label)}</button>`;
+}
+
+function searchBox(placeholder = "Search records...") {
+  return `<input class="search-input" id="pageSearch"
+    type="search" placeholder="${escapeHTML(placeholder)}">`;
+}
+
+function table(headers, rows) {
+  if (!rows.length) return emptyMessage("No records found");
+
+  return `<div class="table-wrap"><table>
+    <thead><tr>${headers.map(h => `<th>${escapeHTML(h)}</th>`).join("")}</tr></thead>
+    <tbody>${rows.join("")}</tbody>
+  </table></div>`;
+}
+
+function actionButtons(type, id) {
+  return `<div class="actions">
+    <button type="button" class="btn small secondary"
+      data-action="edit" data-type="${escapeHTML(type)}"
+      data-id="${escapeHTML(id)}">Edit</button>
+    <button type="button" class="btn small danger"
+      data-action="delete" data-type="${escapeHTML(type)}"
+      data-id="${escapeHTML(id)}">Delete</button>
+  </div>`;
+}
+
+function card(title, value, icon, description = "") {
+  return `<div class="stat-card">
+    <div class="stat-icon">${icon}</div>
+    <div><p>${escapeHTML(title)}</p>
+    <h3>${escapeHTML(value)}</h3>
+    <small>${escapeHTML(description)}</small></div>
+  </div>`;
+}
+
+function pageHeader(title, subtitle, action = "") {
+  return `<div class="page-head">
+    <div><h2>${escapeHTML(title)}</h2>
+    <p>${escapeHTML(subtitle)}</p></div>
+    ${action}
+  </div>`;
+}
+
+function field(label, name, value = "", type = "text", required = true) {
+  const val = escapeHTML(value);
+  const req = required ? "required" : "";
+
+  if (type === "textarea") {
+    return `<label class="field">${escapeHTML(label)}
+      <textarea name="${escapeHTML(name)}" ${req}>${val}</textarea>
+    </label>`;
+  }
+
+  return `<label class="field">${escapeHTML(label)}
+    <input name="${escapeHTML(name)}" type="${escapeHTML(type)}"
+      value="${val}" ${req}>
+  </label>`;
+}
+
+function selectField(label, name, options, value = "", required = true) {
+  return `<label class="field">${escapeHTML(label)}
+    <select name="${escapeHTML(name)}" ${required ? "required" : ""}>
+      <option value="">Select ${escapeHTML(label)}</option>
+      ${options.map(option => {
+        const v = typeof option === "string" ? option : option.value;
+        const text = typeof option === "string" ? option : option.label;
+        return `<option value="${escapeHTML(v)}"
+          ${String(value) === String(v) ? "selected" : ""}>
+          ${escapeHTML(text)}
+        </option>`;
+      }).join("")}
+    </select>
+  </label>`;
+}
+
+function openModal(title, body) {
+  $("#mTitle").textContent = title;
+  $("#mBody").innerHTML = body;
+  $("#modal").hidden = false;
+  $("#modal").classList.add("open");
+}
+
+function closeModal() {
+  $("#modal").hidden = true;
+  $("#modal").classList.remove("open");
+  $("#mBody").innerHTML = "";
+}
+
+function formData(form) {
+  return Object.fromEntries(new FormData(form).entries());
+}
+
+/* ==================== DATA ==================== */
+
+const DB = {
+  students: {
+    key: "students",
+    title: "Students",
+    prefix: "STU",
+    fields: [
+      ["Student Name", "name", "text"],
+      ["Gender", "gender", "select", ["Male", "Female", "Other"]],
+      ["Date of Birth", "dob", "date"],
+      ["Class", "className", "text"],
+      ["Email", "email", "email", false],
+      ["Phone", "phone", "tel"]
+    ]
+  },
+
+  teachers: {
+    key: "teachers",
+    title: "Teachers",
+    prefix: "TCH",
+    fields: [
+      ["Teacher Name", "name", "text"],
+      ["Gender", "gender", "select", ["Male", "Female", "Other"]],
+      ["Subject", "subject", "text"],
+      ["Email", "email", "email", false],
+      ["Phone", "phone", "tel"]
+    ]
+  },
+
+  classes: {
+    key: "classes",
+    title: "Classes",
+    prefix: "CLS",
+    fields: [
+      ["Class Name", "className", "text"],
+      ["Section", "section", "text"],
+      ["Class Teacher", "teacher", "text"],
+      ["Room Number", "room", "text"]
+    ]
+  },
+
+  fees: {
+    key: "fees",
+    title: "Fees",
+    prefix: "FEE",
+    fields: [
+      ["Student ID", "studentId", "text"],
+      ["Student Name", "studentName", "text"],
+      ["Total Fees (₹)", "total", "number"],
+      ["Amount Paid (₹)", "paid", "number"]
+    ]
+  },
+
+  results: {
+    key: "results",
+    title: "Results",
+    prefix: "RES",
+    fields: [
+      ["Student ID", "studentId", "text"],
+      ["Student Name", "studentName", "text"],
+      ["Exam Name", "examName", "text"],
+      ["Mathematics Marks", "maths", "number"],
+      ["English Marks", "english", "number"],
+      ["Science Marks", "science", "number"],
+      ["Computer Marks", "computer", "number"],
+      ["Social Studies Marks", "social", "number"]
+    ]
+  },
+
+  exams: {
+    key: "exams",
+    title: "Exams",
+    prefix: "EXM",
+    fields: [
+      ["Exam Name", "examName", "text"],
+      ["Class", "className", "text"],
+      ["Subject", "subject", "text"],
+      ["Exam Date", "examDate", "date"],
+      ["Start Time", "startTime", "time"],
+      ["Duration (minutes)", "duration", "number"],
+      ["Maximum Marks", "maxMarks", "number"],
+      ["Room Number", "room", "text"],
+      ["Instructions", "instructions", "textarea", false]
+    ]
+  },
+
+  notices: {
+    key: "notices",
+    title: "Notices",
+    prefix: "NOT",
+    fields: [
+      ["Notice Title", "title", "text"],
+      ["Category", "category", "select",
+        ["General", "Exam", "Holiday", "Event", "Important"]],
+      ["Publish Date", "date", "date"],
+      ["Audience", "audience", "select",
+        ["All", "Students", "Teachers", "Parents"]],
+      ["Notice Details", "details", "textarea"]
+    ]
+  }
+};
+
+function readRecords(type) {
+  return getStore(DB[type].key);
+}
+
+function writeRecords(type, records) {
+  setStore(DB[type].key, records);
+}
+
+function getRecord(type, id) {
+  return readRecords(type).find(record => record.id === id);
+}
+
+/* ==================== LOGIN ==================== */
+
+function showApp() {
+  $("#login").hidden = true;
+  $("#app").hidden = false;
+
+  if (!localStorage.getItem("sms_logged_in")) {
+    localStorage.setItem("sms_logged_in", "true");
+  }
+
+  navigate("dashboard");
+}
+
+function showLogin() {
+  $("#app").hidden = true;
+  $("#login").hidden = false;
+}
+
+$("#loginForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+
+  const username = $("#lu").value.trim();
+  const password = $("#lp").value;
+  const error = $("#loginErr");
+
+  // Demo login only; replace with server authentication for real deployment.
+  if (username === "admin" && password === "admin123") {
+    error.hidden = true;
+    localStorage.setItem("sms_logged_in", "true");
+    showApp();
+  } else {
+    error.hidden = false;
+    error.textContent = "Incorrect username or password.";
+  }
+});
+
+$("#togglePw")?.addEventListener("click", () => {
+  const input = $("#lp");
+  input.type = input.type === "password" ? "text" : "password";
+  $("#togglePw").textContent = input.type === "password" ? "Show" : "Hide";
+});
+
+$("#logout")?.addEventListener("click", () => {
+  localStorage.removeItem("sms_logged_in");
+  closeSidebar();
+  showLogin();
+});
+
+/* ==================== NAVIGATION ==================== */
+
+let currentPage = "dashboard";
+
+const pageTitles = {
+  dashboard: "Dashboard",
+  students: "Students",
+  teachers: "Teachers",
+  classes: "Classes",
+  attendance: "Attendance",
+  fees: "Fees Management",
+  results: "Results",
+  exams: "Exam Management",
+  "exam-form": "Create Exam Form",
+  "exam-list": "Exam Form List",
+  notices: "Notice Board",
+  "notice-form": "Add Notice",
+  reports: "Reports"
+};
+
+function navigate(page, options = {}) {
+  const validPages = Object.keys(pageTitles);
+  if (!validPages.includes(page)) page = "dashboard";
+
+  currentPage = page;
+
+  setTitle(pageTitles[page]);
+
+  $$(".nav a[data-p]").forEach(link => {
+    link.classList.toggle("active", link.dataset.p === page);
+  });
+
+  closeSidebar();
+
+  switch (page) {
+    case "dashboard":
+      renderDashboard();
+      break;
+    case "students":
+      renderStudents();
+      break;
+    case "teachers":
+      renderTeachers();
+      break;
+    case "classes":
+      renderGeneric("classes");
+      break;
+    case "attendance":
+      renderAttendance();
+      break;
+    case "fees":
+      renderGeneric("fees");
+      break;
+    case "results":
+      renderResults();
+      break;
+    case "exams":
+    case "exam-list":
+      renderExams();
+      break;
+    case "exam-form":
+      renderExamForm();
+      break;
+    case "notices":
+      renderNotices();
+      break;
+    case "notice-form":
+      renderNoticeForm();
+      break;
+    case "reports":
+      renderReports();
+      break;
+  }
+
+  if (options.action === "add") {
+    if (page === "students") openRecordForm("students");
+    if (page === "teachers") openRecordForm("teachers");
+  }
+}
+
+document.addEventListener("click", event => {
+  const link = event.target.closest("[data-p]");
+  if (!link) return;
+
+  event.preventDefault();
+
+  navigate(link.dataset.p, {
+    action: link.dataset.action || ""
+  });
+});
+
+/* ==================== SIDEBAR ==================== */
+
+function openSidebar() {
+  $(".sidebar")?.classList.add("open");
+  $("#overlay")?.classList.add("show");
+}
+
+function closeSidebar() {
+  $(".sidebar")?.classList.remove("open");
+  $("#overlay")?.classList.remove("show");
+}
+
+$("#menuBtn")?.addEventListener("click", openSidebar);
+$("#overlay")?.addEventListener("click", closeSidebar);
+
+/* ==================== DASHBOARD ==================== */
+
+function renderDashboard() {
+  const students = readRecords("students");
+  const teachers = readRecords("teachers");
+  const classes = readRecords("classes");
+  const fees = readRecords("fees");
+  const exams = readRecords("exams");
+  const notices = readRecords("notices");
+
+  const totalFees = fees.reduce((sum, item) => sum + number(item.total), 0);
+  const paidFees = fees.reduce((sum, item) => sum + number(item.paid), 0);
+  const remaining = Math.max(0, totalFees - paidFees);
+
+  const recentNotices = [...notices]
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, 4);
+
+  $("#view").innerHTML = `
+    ${pageHeader("School Dashboard",
+      "Overview of your school's records and activities.")}
+
+    <div class="stats-grid">
+      ${card("Total Students", students.length, "🎓", "Registered students")}
+      ${card("Total Teachers", teachers.length, "👨‍🏫", "Registered teachers")}
+      ${card("Total Classes", classes.length, "🏫", "Created classes")}
+      ${card("Examinations", exams.length, "📝", "Exam forms created")}
+      ${card("Fees Collected", money(paidFees), "💰", "Recorded payments")}
+      ${card("Fees Remaining", money(remaining), "📊", "Based on fee records")}
+    </div>
+
+    <div class="dashboard-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <h3>Quick Actions</h3>
+        </div>
+        <div class="quick-actions">
+          ${button("+ Add Student", "add-student", "primary")}
+          ${button("+ Add Teacher", "add-teacher", "primary")}
+          ${button("+ Create Exam", "new-exam", "secondary")}
+          ${button("+ Add Notice", "new-notice", "secondary")}
+          ${button("View Reports", "open-reports", "secondary")}
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><h3>Latest Notices</h3></div>
+        ${recentNotices.length ? recentNotices.map(n => `
+          <div class="notice-mini">
+            <strong>${escapeHTML(n.title)}</strong>
+            <p>${escapeHTML(n.date || "")} · ${escapeHTML(n.category || "General")}</p>
+          </div>
+        `).join("") : emptyMessage("No notices published")}
+      </section>
+    </div>
+  `;
+}
+
+/* ==================== GENERIC CRUD ==================== */
+
+function recordFields(type, record = {}) {
+  const config = DB[type];
+
+  return config.fields.map(([label, name, kind, options, required]) => {
+    const isRequired = required !== false;
+    const value = record[name] ?? "";
+
+    if (kind === "select") {
+      return selectField(label, name, options, value, isRequired);
+    }
+
+    return field(label, name, value, kind, isRequired);
+  }).join("");
+}
+
+function openRecordForm(type, id = "") {
+  const config = DB[type];
+  const record = id ? getRecord(type, id) : null;
+
+  if (id && !record) {
+    notify("Record not found.");
+    return;
+  }
+
+  openModal(
+    `${record ? "Edit" : "Add"} ${config.title.slice(0, -1)}`,
+    `<form id="recordForm" class="form-grid">
+      ${recordFields(type, record || {})}
+      <div class="form-actions">
+        <button type="button" class="btn secondary" data-action="close-modal">Cancel</button>
+        <button type="submit" class="btn primary">${record ? "Save Changes" : "Save Record"}</button>
+      </div>
+    </form>`
+  );
+
+  $("#recordForm").addEventListener("submit", event => {
+    event.preventDefault();
+
+    const data = formData(event.currentTarget);
+
+    if (type === "fees") {
+      data.total = Math.max(0, number(data.total));
+      data.paid = Math.max(0, number(data.paid));
+
+      if (data.paid > data.total) {
+        notify("Paid amount cannot exceed total fees.");
+        return;
+      }
+
+      data.remaining = data.total - data.paid;
+      data.status = data.remaining === 0 ? "Paid" :
+        data.paid > 0 ? "Partial" : "Unpaid";
+    }
+
+    if (type === "results") {
+      const subjects = ["maths", "english", "science", "computer", "social"];
+      for (const subject of subjects) {
+        data[subject] = number(data[subject]);
+
+        if (data[subject] < 0 || data[subject] > 100) {
+          notify("Marks must be between 0 and 100.");
+          return;
+        }
+      }
+
+      data.total = subjects.reduce((sum, subject) => sum + data[subject], 0);
+      data.percentage = (data.total / 500 * 100).toFixed(2);
+      data.grade = gradeFromPercentage(number(data.percentage));
+    }
+
+    const records = readRecords(type);
+
+    if (record) {
+      const index = records.findIndex(item => item.id === id);
+      records[index] = { ...records[index], ...data };
+    } else {
+      data.id = makeId(config.prefix);
+      data.createdAt = new Date().toISOString();
+      records.unshift(data);
+    }
+
+    writeRecords(type, records);
+    closeModal();
+    navigate(currentPage);
+    notify(record ? "Record updated successfully." : "Record added successfully.");
+  });
+}
+
+function renderGeneric(type) {
+  const config = DB[type];
+  const records = readRecords(type);
+
+  $("#view").innerHTML = `
+    ${pageHeader(
+      config.title,
+      `Manage ${config.title.toLowerCase()} records.`,
+      button(`+ Add ${config.title.slice(0, -1)}`, `add-${type}`, "primary")
+    )}
+
+    <section class="panel">
+      <div class="toolbar">
+        ${searchBox(`Search ${config.title.toLowerCase()}...`)}
+        <span class="record-count">${records.length} records</span>
+      </div>
+      <div id="recordsTable"></div>
+    </section>
+  `;
+
+  const columns = {
+    classes: [
+      ["className", "Class"],
+      ["section", "Section"],
+      ["teacher", "Class Teacher"],
+      ["room", "Room"]
+    ],
+    fees: [
+      ["studentId", "Student ID"],
+      ["studentName", "Student Name"],
+      ["total", "Total Fees"],
+      ["paid", "Paid"],
+      ["remaining", "Remaining"],
+      ["status", "Status"]
+    ]
+  }[type];
+
+  function draw(filter = "") {
+    const filtered = readRecords(type).filter(record =>
+      Object.values(record).join(" ").toLowerCase().includes(filter.toLowerCase())
+    );
+
+    const rows = filtered.map(record => `
+      <tr>
+        ${columns.map(([key, label]) => {
+          let value = record[key] ?? "";
+          if (["total", "paid", "remaining"].includes(key)) value = money(value);
+          return `<td>${escapeHTML(value)}</td>`;
+        }).join("")}
+        <td>${actionButtons(type, record.id)}</td>
+      </tr>
+    `);
+
+    $("#recordsTable").innerHTML = table(
+      [...columns.map(c => c[1]), "Actions"],
+      rows
+    );
+  }
+
+  draw();
+
+  $("#pageSearch").addEventListener("input", event => draw(event.target.value));
+}
+
+/* ==================== STUDENTS ==================== */
+
+function renderStudents() {
+  const students = readRecords("students");
+
+  $("#view").innerHTML = `
+    ${pageHeader("Student Management",
+      "Add students in the form and manage the student list separately.",
+      button("+ Add Student", "add-student", "primary"))}
+
+    <div class="section-tabs">
+      <button class="tab-btn active" data-action="student-tab-add">Add Student</button>
+      <button class="tab-btn" data-action="student-tab-list">Student List</button>
+    </div>
+
+    <section id="studentAddSection" class="panel">
+      <div class="panel-head"><h3>Register a New Student</h3></div>
+      <form id="studentQuickForm" class="form-grid">
+        ${recordFields("students")}
+        <div class="form-actions">
+          <button class="btn primary" type="submit">Save Student</button>
+          <button class="btn secondary" type="reset">Clear Form</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="studentListSection" class="panel">
+      <div class="panel-head"><h3>Student List</h3>
+        <span class="record-count">${students.length} students</span>
+      </div>
+      <div class="toolbar">
+        ${searchBox("Search by name, ID, class or phone...")}
+      </div>
+      <div id="studentTable"></div>
+    </section>
+  `;
+
+  function draw(filter = "") {
+    const data = readRecords("students").filter(s =>
+      Object.values(s).join(" ").toLowerCase().includes(filter.toLowerCase())
+    );
+
+    $("#studentTable").innerHTML = table(
+      ["Student ID", "Name", "Gender", "Class", "Phone", "Actions"],
+      data.map(s => `
+        <tr>
+          <td>${escapeHTML(s.id)}</td>
+          <td>${escapeHTML(s.name)}</td>
+          <td>${escapeHTML(s.gender)}</td>
+          <td>${escapeHTML(s.className)}</td>
+          <td>${escapeHTML(s.phone)}</td>
+          <td>
+            ${actionButtons("students", s.id)}
+            <button class="btn small secondary" data-action="print-student"
+              data-id="${escapeHTML(s.id)}">Print</button>
+          </td>
+        </tr>
+      `)
+    );
+  }
+
+  draw();
+
+  $("#pageSearch").addEventListener("input", e => draw(e.target.value));
+
+  $("#studentQuickForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const data = formData(event.currentTarget);
+    data.id = makeId("STU");
+    data.createdAt = new Date().toISOString();
+
+    const records = readRecords("students");
+    records.unshift(data);
+    writeRecords("students", records);
+
+    event.currentTarget.reset();
+    draw($("#pageSearch").value);
+    notify("Student added successfully.");
+    renderStudents();
+  });
+}
+
+/* ==================== TEACHERS ==================== */
+
+function renderTeachers() {
+  const teachers = readRecords("teachers");
+
+  $("#view").innerHTML = `
+    ${pageHeader("Teacher Management",
+      "Register teachers and manage the teacher list separately.",
+      button("+ Add Teacher", "add-teacher", "primary"))}
+
+    <div class="section-tabs">
+      <button class="tab-btn active" data-action="teacher-tab-add">Add Teacher</button>
+      <button class="tab-btn" data-action="teacher-tab-list">Teacher List</button>
+    </div>
+
+    <section id="teacherAddSection" class="panel">
+      <div class="panel-head"><h3>Register a New Teacher</h3></div>
+      <form id="teacherQuickForm" class="form-grid">
+        ${recordFields("teachers")}
+        <div class="form-actions">
+          <button class="btn primary" type="submit">Save Teacher</button>
+          <button class="btn secondary" type="reset">Clear Form</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="teacherListSection" class="panel">
+      <div class="panel-head"><h3>Teacher List</h3>
+        <span class="record-count">${teachers.length} teachers</span>
+      </div>
+      <div class="toolbar">
+        ${searchBox("Search by name, subject or phone...")}
+      </div>
+      <div id="teacherTable"></div>
+    </section>
+  `;
+
+  function draw(filter = "") {
+    const data = readRecords("teachers").filter(t =>
+      Object.values(t).join(" ").toLowerCase().includes(filter.toLowerCase())
+    );
+
+    $("#teacherTable").innerHTML = table(
+      ["Teacher ID", "Name", "Gender", "Subject", "Phone", "Actions"],
+      data.map(t => `
+        <tr>
+          <td>${escapeHTML(t.id)}</td>
+          <td>${escapeHTML(t.name)}</td>
+          <td>${escapeHTML(t.gender)}</td>
+          <td>${escapeHTML(t.subject)}</td>
+          <td>${escapeHTML(t.phone)}</td>
+          <td>${actionButtons("teachers", t.id)}</td>
+        </tr>
+      `)
+    );
+  }
+
+  draw();
+
+  $("#pageSearch").addEventListener("input", e => draw(e.target.value));
+
+  $("#teacherQuickForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const data = formData(event.currentTarget);
+    data.id = makeId("TCH");
+    data.createdAt = new Date().toISOString();
+
+    const records = readRecords("teachers");
+    records.unshift(data);
+    writeRecords("teachers", records);
+
+    event.currentTarget.reset();
+    draw($("#pageSearch").value);
+    notify("Teacher added successfully.");
+    renderTeachers();
+  });
+}
+
+/* ==================== ATTENDANCE ==================== */
+
+function renderAttendance() {
+  const students = readRecords("students");
+  const attendance = getStore("attendance", {});
+
+  $("#view").innerHTML = `
+    ${pageHeader("Attendance Management",
+      "Record and review student attendance.")}
+
+    <section class="panel">
+      <form id="attendanceForm" class="form-grid">
+        ${field("Attendance Date", "date", today(), "date")}
+        ${selectField("Class", "className",
+          [...new Set(students.map(s => s.className).filter(Boolean))])}
+        <div class="form-actions">
+          <button class="btn primary" type="submit">Load Students</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="attendanceList" class="panel">
+      ${emptyMessage("Select a date and class to load students")}
+    </section>
+  `;
+
+  $("#attendanceForm").addEventListener("submit", event => {
+    event.preventDefault();
+
+    const data = formData(event.currentTarget);
+    const list = students.filter(s => s.className === data.className);
+
+    if (!list.length) {
+      $("#attendanceList").innerHTML = emptyMessage("No students found in this class");
+      return;
+    }
+
+    const key = `${data.date}_${data.className}`;
+    const saved = attendance[key] || {};
+
+    $("#attendanceList").innerHTML = `
+      <div class="panel-head"><h3>Attendance: ${escapeHTML(data.className)}</h3>
+        <span>${escapeHTML(data.date)}</span></div>
+      <form id="attendanceSaveForm">
+        ${table(["Student ID", "Student Name", "Status"],
+          list.map(s => `
+            <tr>
+              <td>${escapeHTML(s.id)}</td>
+              <td>${escapeHTML(s.name)}</td>
+              <td>
+                <select name="${escapeHTML(s.id)}">
+                  ${["Present", "Absent", "Late"].map(status => `
+                    <option ${((saved[s.id] || "Present") === status) ? "selected" : ""}
+                      value="${status}">${status}</option>
+                  `).join("")}
+                </select>
+              </td>
+            </tr>
+          `))}
+        <button class="btn primary" type="submit">Save Attendance</button>
+      </form>
+    `;
+
+    $("#attendanceSaveForm").addEventListener("submit", e => {
+      e.preventDefault();
+      const values = formData(e.currentTarget);
+      const all = getStore("attendance", {});
+      all[key] = values;
+      setStore("attendance", all);
+      notify("Attendance saved successfully.");
+    });
+  });
+}
+
+/* ==================== RESULTS ==================== */
+
+function gradeFromPercentage(percentage) {
+  if (percentage >= 90) return "A+";
+  if (percentage >= 80) return "A";
+  if (percentage >= 70) return "B";
+  if (percentage >= 60) return "C";
+  if (percentage >= 50) return "D";
+  if (percentage >= 35) return "Pass";
+  return "Fail";
+}
+
+function renderResults() {
+  const records = readRecords("results");
+
+  $("#view").innerHTML = `
+    ${pageHeader("Examination Results",
+      "Enter marks and automatically calculate total, percentage and grade.",
+      button("+ Add Result", "add-results", "primary"))}
+
+    <section class="panel">
+      <div class="toolbar">${searchBox("Search student or exam...")}</div>
+      <div id="resultsTable"></div>
+    </section>
+  `;
+
+  function draw(filter = "") {
+    const data = readRecords("results").filter(r =>
+      Object.values(r).join(" ").toLowerCase().includes(filter.toLowerCase())
+    );
+
+    $("#resultsTable").innerHTML = table(
+      ["Student ID", "Student Name", "Exam", "Total / 500", "Percentage", "Grade", "Actions"],
+      data.map(r => `
+        <tr>
+          <td>${escapeHTML(r.studentId)}</td>
+          <td>${escapeHTML(r.studentName)}</td>
+          <td>${escapeHTML(r.examName)}</td>
+          <td>${escapeHTML(r.total)}</td>
+          <td>${escapeHTML(r.percentage)}%</td>
+          <td>${escapeHTML(r.grade)}</td>
+          <td>${actionButtons("results", r.id)}</td>
+        </tr>
+      `)
+    );
+  }
+
+  draw();
+  $("#pageSearch").addEventListener("input", e => draw(e.target.value));
+}
+
+/* ==================== EXAM MANAGEMENT ==================== */
+
+function renderExams() {
+  const exams = readRecords("exams");
+
+  $("#view").innerHTML = `
+    ${pageHeader("Exam Management",
+      "Create examination forms, manage exams and print forms.",
+      button("+ Create Exam Form", "new-exam", "primary"))}
+
+    <div class="stats-grid">
+      ${card("Total Exams", exams.length, "📝", "Exam forms created")}
+      ${card("Upcoming Exams",
+        exams.filter(e => e.examDate >= today()).length,
+        "📅", "Today and future dates")}
+      ${card("Past Exams",
+        exams.filter(e => e.examDate < today()).length,
+        "📚", "Earlier exam dates")}
+    </div>
+
+    <section class="panel">
+      <div class="panel-head"><h3>Exam Form List</h3></div>
+      <div class="toolbar">${searchBox("Search exam name, class or subject...")}</div>
+      <div id="examTable"></div>
+    </section>
+  `;
+
+  function draw(filter = "") {
+    const data = readRecords("exams").filter(e =>
+      Object.values(e).join(" ").toLowerCase().includes(filter.toLowerCase())
+    );
+
+    $("#examTable").innerHTML = table(
+      ["Exam ID", "Exam Name", "Class", "Subject", "Date", "Time", "Actions"],
+      data.map(e => `
+        <tr>
+          <td>${escapeHTML(e.id)}</td>
+          <td>${escapeHTML(e.examName)}</td>
+          <td>${escapeHTML(e.className)}</td>
+          <td>${escapeHTML(e.subject)}</td>
+          <td>${escapeHTML(e.examDate)}</td>
+          <td>${escapeHTML(e.startTime)}</td>
+          <td>
+            ${actionButtons("exams", e.id)}
+            <button class="btn small secondary" data-action="print-exam"
+              data-id="${escapeHTML(e.id)}">Print Form</button>
+          </td>
+        </tr>
+      `)
+    );
+  }
+
+  draw();
+  $("#pageSearch").addEventListener("input", e => draw(e.target.value));
+}
+
+function renderExamForm(id = "") {
+  const record = id ? getRecord("exams", id) : null;
+
+  $("#view").innerHTML = `
+    ${pageHeader(record ? "Edit Exam Form" : "Create Exam Form",
+      "Fill in the examination details. You can print the form after saving.")}
+
+    <section class="panel">
+      <form id="examForm" class="form-grid">
+        ${recordFields("exams", record || {})}
+        <div class="form-actions">
+          <button type="submit" class="btn primary">
+            ${record ? "Update Exam" : "Save Exam Form"}
+          </button>
+          <button type="reset" class="btn secondary">Clear</button>
+          <button type="button" class="btn secondary"
+            data-action="open-exams">Back to Exam List</button>
+        </div>
+      </form>
+    </section>
+  `;
+
+  $("#examForm").addEventListener("submit", event => {
+    event.preventDefault();
+
+    const data = formData(event.currentTarget);
+    data.duration = number(data.duration);
+    data.maxMarks = number(data.maxMarks);
+
+    if (data.duration <= 0 || data.maxMarks <= 0) {
+      notify("Duration and maximum marks must be greater than zero.");
+      return;
+    }
+
+    const records = readRecords("exams");
+
+    if (record) {
+      const index = records.findIndex(e => e.id === id);
+      records[index] = { ...records[index], ...data };
+    } else {
+      data.id = makeId("EXM");
+      data.createdAt = new Date().toISOString();
+      records.unshift(data);
+    }
+
+    writeRecords("exams", records);
+    notify("Exam form saved successfully.");
+
+    navigate("exams");
+  });
+}
+
+/* ==================== NOTICE BOARD ==================== */
+
+function renderNotices() {
+  const notices = readRecords("notices");
+
+  $("#view").innerHTML = `
+    ${pageHeader("Notice Board",
+      "Publish and manage school announcements.",
+      button("+ Add Notice", "new-notice", "primary"))}
+
+    <section class="panel">
+      <div class="toolbar">${searchBox("Search notices...")}</div>
+      <div id="noticeList" class="notice-grid"></div>
+    </section>
+  `;
+
+  function draw(filter = "") {
+    const data = readRecords("notices")
+      .filter(n => Object.values(n).join(" ").toLowerCase().includes(filter.toLowerCase()))
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    $("#noticeList").innerHTML = data.length ? data.map(n => `
+      <article class="notice-card">
+        <div class="notice-tag">${escapeHTML(n.category || "General")}</div>
+        <h3>${escapeHTML(n.title)}</h3>
+        <p>${escapeHTML(n.details)}</p>
+        <div class="notice-meta">
+          <span>📅 ${escapeHTML(n.date)}</span>
+          <span>👥 ${escapeHTML(n.audience)}</span>
+        </div>
+        <div class="actions">
+          ${button("Edit", `edit-notice:${n.id}`, "secondary")}
+          ${button("Print", `print-notice:${n.id}`, "secondary")}
+          ${button("Delete", `delete-notice:${n.id}`, "danger")}
+        </div>
+      </article>
+    `).join("") : emptyMessage("No notices published");
+  }
+
+  draw();
+  $("#pageSearch").addEventListener("input", e => draw(e.target.value));
+}
+
+function renderNoticeForm(id = "") {
+  const record = id ? getRecord("notices", id) : null;
+
+  const values = record ? { ...record } : { date: today() };
+
+  $("#view").innerHTML = `
+    ${pageHeader(record ? "Edit Notice" : "Publish New Notice",
+      "Add a notice for students, teachers, parents or everyone.")}
+
+    <section class="panel">
+      <form id="noticeForm" class="form-grid">
+        ${recordFields("notices", values)}
+        <div class="form-actions">
+          <button class="btn primary" type="submit">
+            ${record ? "Update Notice" : "Publish Notice"}
+          </button>
+          <button type="button" class="btn secondary"
+            data-action="open-notices">Back to Notices</button>
+        </div>
+      </form>
+    </section>
+  `;
+
+  $("#noticeForm").addEventListener("submit", event => {
+    event.preventDefault();
+    const data = formData(event.currentTarget);
+    const records = readRecords("notices");
+
+    if (record) {
+      const index = records.findIndex(n => n.id === id);
+      records[index] = { ...records[index], ...data };
+    } else {
+      data.id = makeId("NOT");
+      data.createdAt = new Date().toISOString();
+      records.unshift(data);
+    }
+
+    writeRecords("notices", records);
+    notify(record ? "Notice updated." : "Notice published.");
+    navigate("notices");
+  });
+}
+
+/* ==================== REPORTS ==================== */
+
+function renderReports() {
+  const students = readRecords("students");
+  const teachers = readRecords("teachers");
+  const fees = readRecords("fees");
+  const results = readRecords("results");
+  const exams = readRecords("exams");
+  const notices = readRecords("notices");
+
+  const totalFees = fees.reduce((sum, f) => sum + number(f.total), 0);
+  const paidFees = fees.reduce((sum, f) => sum + number(f.paid), 0);
+
+  $("#view").innerHTML = `
+    ${pageHeader("School Reports",
+      "Summary of your saved school records.",
+      button("Print Report", "print-report", "primary"))}
+
+    <section class="panel" id="printableReport">
+      <h2>School Management Report</h2>
+      <p>Generated on: ${escapeHTML(today())}</p>
+
+      <div class="stats-grid">
+        ${card("Students", students.length, "🎓")}
+        ${card("Teachers", teachers.length, "👨‍🏫")}
+        ${card("Exams", exams.length, "📝")}
+        ${card("Notices", notices.length, "📢")}
+        ${card("Total Fees", money(totalFees), "💰")}
+        ${card("Fees Paid", money(paidFees), "✅")}
+      </div>
+
+      <h3>Student Register</h3>
+      ${table(["ID", "Name", "Class", "Phone"],
+        students.map(s => `<tr>
+          <td>${escapeHTML(s.id)}</td>
+          <td>${escapeHTML(s.name)}</td>
+          <td>${escapeHTML(s.className)}</td>
+          <td>${escapeHTML(s.phone)}</td>
+        </tr>`))}
+
+      <h3>Teacher Register</h3>
+      ${table(["ID", "Name", "Subject", "Phone"],
+        teachers.map(t => `<tr>
+          <td>${escapeHTML(t.id)}</td>
+          <td>${escapeHTML(t.name)}</td>
+          <td>${escapeHTML(t.subject)}</td>
+          <td>${escapeHTML(t.phone)}</td>
+        </tr>`))}
+
+      <h3>Examination Register</h3>
+      ${table(["Exam", "Class", "Subject", "Date"],
+        exams.map(e => `<tr>
+          <td>${escapeHTML(e.examName)}</td>
+          <td>${escapeHTML(e.className)}</td>
+          <td>${escapeHTML(e.subject)}</td>
+          <td>${escapeHTML(e.examDate)}</td>
+        </tr>`))}
+    </section>
+  `;
+}
+
+/* ==================== PRINTING ==================== */
+
+function printHTML(title, content) {
+  const win = window.open("", "_blank");
+
+  if (!win) {
+    notify("Allow pop-ups to print this document.");
+    return;
+  }
+
+  win.document.open();
+  win.document.write(`<!DOCTYPE html>
+    <html><head><title>${escapeHTML(title)}</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      body{font-family:Arial,sans-serif;color:#172b4d;padding:25px;line-height:1.5}
+      h1,h2{text-align:center}
+      .header{text-align:center;border-bottom:2px solid #123c69;padding-bottom:12px;margin-bottom:20px}
+      .box{border:1px solid #aaa;padding:12px;margin:12px 0}
+      table{width:100%;border-collapse:collapse;margin:12px 0}
+      th,td{border:1px solid #bbb;padding:8px;text-align:left}
+      th{background:#edf4fb}
+      .signatures{display:flex;justify-content:space-between;margin-top:70px}
+      .signature{border-top:1px solid #333;width:180px;text-align:center;padding-top:8px}
+      @page{size:A4;margin:15mm}
+      @media print{button{display:none}}
+    </style></head><body>
+    ${content}
+    <script>window.onload=function(){window.print()}<\/script>
+    </body></html>`);
+  win.document.close();
+}
+
+function printExam(id) {
+  const e = getRecord("exams", id);
+  if (!e) return notify("Exam not found.");
+
+  printHTML("Exam Form", `
+    <div class="header">
+      <h1> SCHOOL MANAGEMENT SYSTEM </h1>
+      <h2>EXAMINATION FORM</h2>
+      <p>Academic Examination Record</p>
+    </div>
+
+    <div class="box"><strong>Exam ID:</strong> ${escapeHTML(e.id)}</div>
+    <div class="box"><strong>Exam Name:</strong> ${escapeHTML(e.examName)}</div>
+    <div class="box"><strong>Class:</strong> ${escapeHTML(e.className)}</div>
+    <div class="box"><strong>Subject:</strong> ${escapeHTML(e.subject)}</div>
+    <div class="box"><strong>Exam Date:</strong> ${escapeHTML(e.examDate)}</div>
+    <div class="box"><strong>Start Time:</strong> ${escapeHTML(e.startTime)}</div>
+    <div class="box"><strong>Duration:</strong> ${escapeHTML(e.duration)} minutes</div>
+    <div class="box"><strong>Maximum Marks:</strong> ${escapeHTML(e.maxMarks)}</div>
+    <div class="box"><strong>Room:</strong> ${escapeHTML(e.room)}</div>
+    <div class="box"><strong>Instructions:</strong><br>${escapeHTML(e.instructions || "Follow the instructions given by the invigilator.")}</div>
+
+    <div class="signatures">
+      <div class="signature">Teacher Signature</div>
+      <div class="signature">Principal Signature</div>
+    </div>
+  `);
+}
+
+function printStudent(id) {
+  const s = getRecord("students", id);
+  if (!s) return notify("Student not found.");
+
+  printHTML("Student Details", `
+    <div class="header">
+      <h1>SCHOOL MANAGEMENT SYSTEM</h1>
+      <h2>STUDENT DETAILS</h2>
+    </div>
+    <div class="box"><strong>Student ID:</strong> ${escapeHTML(s.id)}</div>
+    <div class="box"><strong>Name:</strong> ${escapeHTML(s.name)}</div>
+    <div class="box"><strong>Gender:</strong> ${escapeHTML(s.gender)}</div>
+    <div class="box"><strong>Date of Birth:</strong> ${escapeHTML(s.dob)}</div>
+    <div class="box"><strong>Class:</strong> ${escapeHTML(s.className)}</div>
+    <div class="box"><strong>Email:</strong> ${escapeHTML(s.email)}</div>
+    <div class="box"><strong>Phone:</strong> ${escapeHTML(s.phone)}</div>
+    <div class="signatures">
+      <div class="signature">Class Teacher</div>
+      <div class="signature">Principal</div>
+    </div>
+  `);
+}
+
+function printNotice(id) {
+  const n = getRecord("notices", id);
+  if (!n) return notify("Notice not found.");
+
+  printHTML("School Notice", `
+    <div class="header">
+      <h1>SCHOOL MANAGEMENT SYSTEM</h1>
+      <h2>NOTICE</h2>
+    </div>
+    <p><strong>Notice ID:</strong> ${escapeHTML(n.id)}</p>
+    <p><strong>Date:</strong> ${escapeHTML(n.date)}</p>
+    <p><strong>Category:</strong> ${escapeHTML(n.category)}</p>
+    <p><strong>Audience:</strong> ${escapeHTML(n.audience)}</p>
+    <h2>${escapeHTML(n.title)}</h2>
+    <div class="box">${escapeHTML(n.details).replace(/\n/g, "<br>")}</div>
+    <div class="signatures"><div class="signature">Principal</div></div>
+  `);
+}
+
+/* ==================== ACTION HANDLER ==================== */
+
+document.addEventListener("click", event => {
+  const el = event.target.closest("[data-action]");
+  if (!el) return;
+
+  const action = el.dataset.action;
+  const type = el.dataset.type;
+  const id = el.dataset.id;
+
+  if (action === "close-modal") return closeModal();
+
+  if (action === "add-student") return openRecordForm("students");
+  if (action === "add-teacher") return openRecordForm("teachers");
+  if (action === "add-classes") return openRecordForm("classes");
+  if (action === "add-fees") return openRecordForm("fees");
+  if (action === "add-results") return openRecordForm("results");
+
+  if (action === "new-exam") return navigate("exam-form");
+  if (action === "new-notice") return navigate("notice-form");
+  if (action === "open-exams") return navigate("exams");
+  if (action === "open-notices") return navigate("notices");
+  if (action === "open-reports") return navigate("reports");
+
+  if (action === "student-tab-add") {
+    $("#studentAddSection").hidden = false;
+    $("#studentListSection").hidden = true;
+    $$(".section-tabs .tab-btn").forEach(b => b.classList.remove("active"));
+    el.classList.add("active");
+    return;
+  }
+
+  if (action === "student-tab-list") {
+    $("#studentAddSection").hidden = true;
+    $("#studentListSection").hidden = false;
+    $$(".section-tabs .tab-btn").forEach(b => b.classList.remove("active"));
+    el.classList.add("active");
+    return;
+  }
+
+  if (action === "teacher-tab-add") {
+    $("#teacherAddSection").hidden = false;
+    $("#teacherListSection").hidden = true;
+    $$(".section-tabs .tab-btn").forEach(b => b.classList.remove("active"));
+    el.classList.add("active");
+    return;
+  }
+
+  if (action === "teacher-tab-list") {
+    $("#teacherAddSection").hidden = true;
+    $("#teacherListSection").hidden = false;
+    $$(".section-tabs .tab-btn").forEach(b => b.classList.remove("active"));
+    el.classList.add("active");
+    return;
+  }
+
+  if (action === "edit") {
+    if (DB[type]) return openRecordForm(type, id);
+    return;
+  }
+
+  if (action === "delete") {
+    if (!DB[type]) return;
+
+    const record = getRecord(type, id);
+    if (!record) return notify("Record not found.");
+
+    if (!confirm(`Delete this ${DB[type].title.toLowerCase()} record?`)) return;
+
+    writeRecords(type, readRecords(type).filter(item => item.id !== id));
+    navigate(currentPage);
+    notify("Record deleted.");
+    return;
+  }
+
+  if (action === "print-student") return printStudent(id);
+  if (action === "print-exam") return printExam(id);
+  if (action === "print-report") {
+    window.print();
+    return;
+  }
+
+  if (action.startsWith("edit-notice:")) {
+    return renderNoticeForm(action.split(":")[1]);
+  }
+
+  if (action.startsWith("print-notice:")) {
+    return printNotice(action.split(":")[1]);
+  }
+
+  if (action.startsWith("delete-notice:")) {
+    const noticeId = action.split(":")[1];
+
+    if (!confirm("Delete this notice?")) return;
+
+    writeRecords("notices",
+      readRecords("notices").filter(n => n.id !== noticeId));
+
+    navigate("notices");
+    notify("Notice deleted.");
+    return;
+  }
+});
+
+/* ==================== MODAL CONTROLS ==================== */
+
+$("#mClose")?.addEventListener("click", closeModal);
+
+$("#modal")?.addEventListener("click", event => {
+  if (event.target === $("#modal")) closeModal();
+});
+
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    closeModal();
+    closeSidebar();
+  }
+});
+
+/* ==================== INITIALIZE ==================== */
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (localStorage.getItem("sms_logged_in") === "true") {
+    showApp();
+  } else {
+    showLogin();
+  }
+});
