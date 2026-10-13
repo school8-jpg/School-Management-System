@@ -3,190 +3,82 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#123c69">
-
   <title>School Management System</title>
-
   <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-<!-- LOGIN PAGE -->
-<section id="login">
-  <form id="loginForm" class="login-card" novalidate>
-
-    <div class="logo">SMS</div>
-
-    <h1>School Management System</h1>
-    <p class="sub">Smart School Administration Portal</p>
-
-    <div id="loginErr" class="err" hidden></div>
-
-    <label>
-      Username
-      <input id="lu" type="text" placeholder="Enter username"
-             autocomplete="username" required>
-    </label>
-
-    <label>
-      Password
-      <div class="pw">
-        <input id="lp" type="password" placeholder="Enter password"
-               autocomplete="current-password" required>
-        <button type="button" id="togglePw">Show</button>
-      </div>
-    </label>
-
-    <button type="submit" class="btn primary block">Login</button>
-
-    <p class="hint">Username: <b>admin</b> | Password: <b>admin123</b></p>
-
-    <p class="members">
-      Project Members<br>
-      Shravani Pawar &amp; Tanvi Bahirwade
-    </p>
-
+<div id="login" class="login-screen">
+  <form id="loginForm" class="login-card">
+    <div class="logo">🎓</div>
+    <h1>School Management</h1>
+    <p>Welcome to your school portal</p>
+    <label>Username</label>
+    <input id="lu" required value="admin" placeholder="Enter username">
+    <label>Password</label>
+    <input id="lp" type="password" required value="admin123" placeholder="Enter password">
+    <button class="btn primary full" type="submit">Login →</button>
+    <p id="loginErr" class="error"></p>
+    <small>Demo Login: admin / admin123</small>
   </form>
-</section>
+</div>
 
-
-<!-- MAIN APPLICATION -->
-<div id="app" hidden>
-
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-
+<div id="app" class="app hidden">
+  <aside id="sidebar" class="sidebar">
     <div class="brand">
-      <div class="logo sm">SMS</div>
-      <div>
-        <strong>School Portal</strong>
-        <small>Management System</small>
-      </div>
+      <span class="brand-icon">🎓</span>
+      <div><strong>EduManage</strong><small>School Portal</small></div>
     </div>
 
-    <nav class="nav">
+    <div class="side-label">MAIN MENU</div>
+    <button class="nav active" data-p="dashboard">🏠 Dashboard</button>
+    <button class="nav" data-p="students">👨‍🎓 Students</button>
+    <button class="nav" data-p="teachers">👩‍🏫 Teachers</button>
+    <button class="nav" data-p="classes">🏫 Classes & Divisions</button>
+    <button class="nav" data-p="attendance">📋 Attendance</button>
+    <button class="nav" data-p="fees">💰 Fees</button>
+    <button class="nav" data-p="results">📊 Results</button>
+    <button class="nav" data-p="exams">📝 Exams</button>
+    <button class="nav" data-p="notices">📢 Notices</button>
+    <button class="nav" data-p="reports">📈 Reports</button>
 
-      <a href="#dashboard" data-p="dashboard">🏠 Dashboard</a>
-
-      <!-- STUDENTS -->
-      <details class="nav-group" open>
-        <summary>🎓 Students</summary>
-
-        <a href="#students" data-p="students">All Students</a>
-        <a href="#students" data-p="students" data-action="add">+ Add Student</a>
-      </details>
-
-      <!-- TEACHERS -->
-      <details class="nav-group">
-        <summary>👨‍🏫 Teachers</summary>
-
-        <a href="#teachers" data-p="teachers">All Teachers</a>
-        <a href="#teachers" data-p="teachers" data-action="add">+ Add Teacher</a>
-      </details>
-
-      <a href="#classes" data-p="classes">🏫 Classes</a>
-
-      <a href="#attendance" data-p="attendance">📅 Attendance</a>
-
-      <a href="#fees" data-p="fees">💰 Fees Management</a>
-
-      <a href="#results" data-p="results">📊 Results</a>
-
-      <!-- EXAM MANAGEMENT -->
-      <details class="nav-group">
-        <summary>📝 Exam Management</summary>
-
-        <a href="#exams" data-p="exams">Exam Dashboard</a>
-        <a href="#exam-form" data-p="exam-form">Create Exam Form</a>
-        <a href="#exam-list" data-p="exam-list">Exam Form List</a>
-      </details>
-
-      <!-- NOTICE BOARD -->
-      <details class="nav-group">
-        <summary>📢 Notice Board</summary>
-
-        <a href="#notices" data-p="notices">All Notices</a>
-        <a href="#notice-form" data-p="notice-form">+ Add Notice</a>
-      </details>
-
-      <a href="#reports" data-p="reports">📄 Reports</a>
-
-      <button id="logout" type="button">🚪 Logout</button>
-
-    </nav>
-
-    <div class="side-foot">
-      <strong>Project Members</strong>
-      <p>Shravani Pawar</p>
-      <p>Tanvi Bahirwade</p>
+    <div class="sidebar-footer">
+      <small>Project Members</small>
+      <strong>Shravani Pawar</strong>
+      <strong>Tanvi Bahirwade</strong>
     </div>
-
   </aside>
 
+  <div id="overlay" class="overlay"></div>
 
-  <!-- MOBILE OVERLAY -->
-  <div id="overlay"></div>
-
-
-  <!-- MAIN CONTENT -->
-  <div class="main">
-
+  <main class="main">
     <header class="topbar">
-
-      <button id="menuBtn" type="button" aria-label="Open menu">
-        ☰
-      </button>
-
-      <div class="top-heading">
+      <button id="menuBtn" class="menu-btn" aria-label="Open menu">☰</button>
+      <div>
         <h2 id="pageTitle">Dashboard</h2>
-        <p>Welcome to your school administration portal.</p>
+        <small id="today"></small>
       </div>
-
-      <div class="top-right">
-        <span class="status-dot"></span>
-        <span class="user">Administrator</span>
-      </div>
-
+      <button id="logout" class="btn logout">Logout ↗</button>
     </header>
 
+    <section id="view" class="content"></section>
 
-    <!-- DYNAMIC PAGE CONTENT -->
-    <main id="view"></main>
-
-    <footer class="footer">
-      <p>© 2026 School Management System</p>
-      <p>Project Members: Shravani Pawar &amp; Tanvi Bahirwade</p>
-    </footer>
-
-  </div>
-
+    <footer>© 2026 EduManage · School Management System</footer>
+  </main>
 </div>
 
-
-<!-- COMMON MODAL -->
-<div id="modal" class="modal" hidden>
-
-  <div class="mbox">
-
-    <div class="mhead">
-      <h3 id="mTitle">Details</h3>
-      <button id="mClose" type="button" aria-label="Close">&times;</button>
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h2 id="mTitle">Form</h2>
+      <button id="mClose" class="icon-btn" aria-label="Close">✕</button>
     </div>
-
     <div id="mBody"></div>
-
   </div>
-
 </div>
 
+<div id="toast" class="toast"></div>
 
-<!-- TOAST NOTIFICATIONS -->
-<div id="toast" role="status" aria-live="polite"></div>
-
-
-<!-- JAVASCRIPT -->
 <script src="script.js"></script>
-
 </body>
 </html>
