@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2563eb">
+  <title>EduManage | School Management System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="brand-mark large">E</div>
+      <p class="eyebrow">SCHOOL ADMINISTRATION</p>
+      <h1>Welcome back</h1>
+      <p class="muted">Sign in to manage your school in one place.</p>
+      <form id="loginForm">
+        <label for="loginUser">Username</label>
+        <input id="loginUser" autocomplete="username" value="admin" required>
+        <label for="loginPass">Password</label>
+        <input id="loginPass" type="password" autocomplete="current-password" value="admin123" required>
+        <button class="btn primary full" type="submit">Sign in <span>→</span></button>
+        <p id="loginError" class="error-text" aria-live="polite"></p>
+      </form>
+      <div class="demo-hint">Demo login: <b>admin</b> / <b>admin123</b></div>
+    </div>
+    <div class="login-decoration"><div class="orb orb-one"></div><div class="orb orb-two"></div><div class="login-copy"><span>SMARTER SCHOOL.</span><h2>Better learning<br>starts here.</h2><p>A simple, organized workspace for everyday school operations.</p></div></div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand"><div class="brand-mark">E</div><div><strong>EduManage</strong><small>School Portal</small></div></div>
+      <div class="side-label">WORKSPACE</div>
+      <nav id="mainNav">
+        <button class="nav-item active" data-page="dashboard"><span>▦</span> Dashboard</button>
+        <button class="nav-item" data-page="students"><span>♙</span> Students <b id="navStudentCount" class="nav-count">0</b></button>
+        <button class="nav-item" data-page="teachers"><span>♧</span> Teachers</button>
+        <button class="nav-item" data-page="classes"><span>▤</span> Classes</button>
+        <button class="nav-item" data-page="attendance"><span>✓</span> Attendance</button>
+        <button class="nav-item" data-page="fees"><span>₹</span> Fees</button>
+        <button class="nav-item" data-page="results"><span>✧</span> Results</button>
+        <button class="nav-item" data-page="exams"><span>▣</span> Exams</button>
+        <button class="nav-item" data-page="notices"><span>▤</span> Notices</button>
+        <button class="nav-item" data-page="reports"><span>▥</span> Reports</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="side-help"><div class="help-icon">✦</div><b>Everything in one place</b><p>Keep school records organized and easy to find.</p></div>
+        <button id="logoutBtn" class="logout-btn"><span>↪</span> Sign out</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="menuToggle" class="icon-btn menu-toggle" aria-label="Open menu">☰</button>
+        <div class="breadcrumb"><span>Workspace</span><b>/</b><strong id="pageCrumb">Dashboard</strong></div>
+        <div class="top-actions"><div class="today-chip"><span class="live-dot"></span><span id="todayText"></span></div><div class="avatar">A</div><div class="user-meta"><b>Administrator</b><small>School Admin</small></div></div>
+      </header>
+      <section class="page-wrap">
+        <div id="pageContent"></div>
+        <footer class="footer"><span>© <span id="year"></span> EduManage School Portal</span><span>Project Members: <b>Shravani Pawar &amp; Tanvi Bahirwade</b></span></footer>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status"></div>
+  <div id="modalRoot"></div>
+  <script src="script.js"></script>
+</body>
+</html>

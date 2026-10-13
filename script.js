@@ -1,940 +1,194 @@
-"use strict";
-
-const $ = (s, root = document) => root.querySelector(s);
-const $$ = (s, root = document) => [...root.querySelectorAll(s)];
-
-const KEYS = {
-  students: "sms_students",
-  teachers: "sms_teachers",
-  classes: "sms_classes",
-  attendance: "sms_attendance",
-  fees: "sms_fees",
-  results: "sms_results",
-  exams: "sms_exams",
-  notices: "sms_notices"
-};
-
-const CLASS_NAMES = ["5th", "6th", "7th", "8th", "9th", "10th"];
-const DIVISIONS = ["A", "B", "C", "D", "E"];
-
-const FIRST_NAMES = [
-  "Aarav", "Sai", "Aditya", "Rohan", "Om", "Atharva", "Vedant",
-  "Soham", "Krish", "Yash", "Arjun", "Ishaan", "Vihaan", "Reyansh",
-  "Anaya", "Saanvi", "Aarya", "Diya", "Anvi", "Ira", "Myra",
-  "Aditi", "Pooja", "Sneha", "Sakshi", "Riya", "Neha", "Kavya",
-  "Tanvi", "Shravani", "Pranav", "Nikhil", "Siddharth", "Kunal",
-  "Harsh", "Akash", "Rutuja", "Pallavi", "Mrunal", "Vaishnavi"
-];
-
-const LAST_NAMES = [
-  "Patil", "Sharma", "Jadhav", "Pawar", "Shinde", "More",
-  "Deshmukh", "Kulkarni", "Gaikwad", "Chavan", "Mane",
-  "Kadam", "Bhosale", "Joshi", "Sawant", "Thorat",
-  "Salunkhe", "Ghorpade", "Kale", "Pansare", "Wagh",
-  "Lokhande", "Nikam", "Dhole", "Yadav", "Pawar",
-  "Desai", "Mali", "Suryawanshi", "Bendale"
-];
-
-const TEACHER_NAMES = [
-  "Anjali Patil", "Rahul Deshmukh", "Sneha Kulkarni",
-  "Amit Jadhav", "Pooja Shinde", "Sanjay Pawar"
-];
-
-const SUBJECTS = ["English", "Mathematics", "Science", "Marathi", "Social Studies", "Computer"];
-
-function read(key) {
-  try {
-    const value = JSON.parse(localStorage.getItem(KEYS[key]) || "[]");
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
+(() => {
+'use strict';
+const $ = (s, root=document) => root.querySelector(s);
+const $$ = (s, root=document) => [...root.querySelectorAll(s)];
+const KEY = {students:'sms_students',teachers:'sms_teachers',classes:'sms_classes',attendance:'sms_attendance',fees:'sms_fees',results:'sms_results',exams:'sms_exams',notices:'sms_notices'};
+const CLASS_NAMES = ['5th','6th','7th','8th','9th','10th'];
+const DIVISIONS = ['A','B','C','D','E'];
+const FIRST = ['Aarav','Sai','Aditya','Rohan','Om','Atharva','Vedant','Soham','Krish','Yash','Vihaan','Arjun','Ishaan','Reyansh','Kabir','Tanvi','Anaya','Aarya','Saanvi','Ira','Myra','Diya','Avni','Prisha','Riya','Anvi','Kavya','Siya','Neha','Pooja','Mihir','Siddhant','Parth','Shreyas','Nikhil','Sakshi','Mrunal','Tejas','Ishita','Aditi'];
+const LAST = ['Patil','Sharma','Jadhav','Pawar','Shinde','More','Deshmukh','Kulkarni','Gaikwad','Chavan','Mane','Kadam','Bhosale','Joshi','Sawant','Salunkhe','Thorat','Pawar','Naik','Lokhande','Kale','Mali','Gore','Wagh','Inamdar','Pisal','Dhumal','Khot','Raut','Phadtare'];
+let currentPage='dashboard', studentTab='list', teacherTab='list', toastTimer;
+const store = key => { try { return JSON.parse(localStorage.getItem(KEY[key]) || '[]'); } catch { return []; } };
+const save = (key, data) => localStorage.setItem(KEY[key], JSON.stringify(data));
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = prefix => prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7);
+const today = () => new Date().toISOString().slice(0,10);
+const initials = name => String(name||'?').trim().split(/\s+/).slice(0,2).map(x=>x[0]||'').join('').toUpperCase();
+const money = n => '₹'+Number(n||0).toLocaleString('en-IN');
+const niceDate = value => value ? new Date(value+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+const selected = (a,b) => String(a??'')===String(b??'')?'selected':'';
+function toast(message){const el=$('#toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2700);}
+function seedData(){
+  let students=store('students'), teachers=store('teachers'), classes=store('classes');
+  // Backfill missing class/division/roll-number slots, without deleting the user's records.
+  if(!Array.isArray(students)) students=[];
+  let added=0;
+  CLASS_NAMES.forEach((className, ci)=>DIVISIONS.forEach((division, di)=>{for(let rollNo=1;rollNo<=10;rollNo++){
+    const exists=students.some(s=>s.className===className&&s.division===division&&Number(s.rollNo)===rollNo);
+    if(!exists){const idx=ci*50+di*10+rollNo-1;students.push({id:'demo_'+className+division+rollNo,rollNo,name:FIRST[idx%FIRST.length]+' '+LAST[(idx*7+ci+di)%LAST.length],gender:rollNo%2?'Male':'Female',className,division,dob:'',email:`student${ci+1}${division}${rollNo}@school.demo`,phone:'',address:'Maharashtra',status:'Active'});added++;}
+  }}));
+  save('students',students);
+  if(!Array.isArray(classes)) classes=[];
+  CLASS_NAMES.forEach(className=>DIVISIONS.forEach(division=>{if(!classes.some(c=>c.name===className&&c.division===division))classes.push({id:'class_'+className+division,name:className,division,room:'Room '+(100+CLASS_NAMES.indexOf(className)*5+DIVISIONS.indexOf(division)),teacher:''});}));
+  save('classes',classes);
+  if(!Array.isArray(teachers)) teachers=[];
+  const teacherNames=[['Rahul Patil','Mathematics'],['Sneha Sharma','English'],['Amit Jadhav','Science'],['Pooja Pawar','Social Studies'],['Neha Shinde','Marathi'],['Sagar Kulkarni','Computer']];
+  CLASS_NAMES.forEach((className,i)=>{if(!teachers.some(t=>t.className===className)){teachers.push({id:'teacher_demo_'+className,name:teacherNames[i][0],subject:teacherNames[i][1],className,phone:'',email:`teacher${i+1}@school.demo`,qualification:'B.Ed.',status:'Active'});}});
+  save('teachers',teachers);
+  for(const key of ['attendance','fees','results','exams','notices']) if(!Array.isArray(store(key)))save(key,[]);
+  if(added) console.info(`${added} demo students backfilled`);
 }
-
-function save(key, value) {
-  localStorage.setItem(KEYS[key], JSON.stringify(value));
+function nav(page){currentPage=page;$('#pageCrumb').textContent=page[0].toUpperCase()+page.slice(1);$$('.nav-item').forEach(b=>b.classList.toggle('active',b.dataset.page===page));$('#sidebar').classList.remove('open');render();}
+function heading(title,sub,actions=''){return `<div class="page-heading"><div><h1>${title}</h1><p>${sub}</p></div><div class="heading-actions">${actions}</div></div>`;}
+function stat(label,value,icon,tone,foot){return `<div class="stat-card"><div class="stat-top"><span class="stat-label">${label}</span><span class="stat-icon ${tone}">${icon}</span></div><div class="stat-value">${value}</div><div class="stat-foot">${foot}</div></div>`;}
+function person(name,sub){return `<div class="person-cell"><span class="person-avatar">${esc(initials(name))}</span><span><b>${esc(name)}</b><small>${esc(sub||'')}</small></span></div>`;}
+function pill(status){const s=String(status||'Active').toLowerCase();let cls=['active','paid','present','published'].includes(s)?s:['inactive','absent','unpaid','draft'].includes(s)?s:['pending','partial','late'].includes(s)?s:'active';return `<span class="pill ${cls}">${esc(status||'Active')}</span>`;}
+function panel(title,body,extra=''){return `<section class="panel"><div class="panel-head"><h3>${title}</h3>${extra}</div>${body}</section>`;}
+function tablePanel(title, searchPlaceholder, filters, tableHead, rows, emptyText='No records found.'){
+ return `<section class="panel table-panel"><div class="table-toolbar"><h3>${title}</h3><div class="toolbar-controls"><input class="search-input" id="tableSearch" placeholder="${searchPlaceholder}" aria-label="Search records">${filters||''}</div></div><div class="table-wrap"><table><thead><tr>${tableHead}</tr></thead><tbody id="tableRows">${rows||''}</tbody></table>${rows?'':`<div class="empty-state"><strong>${emptyText}</strong>Add a record or change your search.</div>`}</div></section>`;
 }
-
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+function classOptions(value='', includeAll=false){return (includeAll?'<option value="">All classes</option>':'<option value="">Select class</option>')+CLASS_NAMES.map(c=>`<option ${selected(c,value)} value="${c}">${c}</option>`).join('');}
+function divisionOptions(value='',includeAll=false){return (includeAll?'<option value="">All divisions</option>':'<option value="">Select division</option>')+DIVISIONS.map(d=>`<option ${selected(d,value)} value="${d}">${d}</option>`).join('');}
+function field(label,name,value='',type='text',opts=null,full=false,required=false){let control=opts?`<select name="${name}" ${required?'required':''}>${opts}</select>`:type==='textarea'?`<textarea name="${name}" ${required?'required':''}>${esc(value)}</textarea>`:`<input name="${name}" type="${type}" value="${esc(value)}" ${required?'required':''} ${type==='number'?'min="0"':''}>`;return `<div class="form-field ${full?'full-span':''}"><label>${label}${required?' *':''}</label>${control}</div>`;}
+function formHtml(kind,item={}){
+ let fields='';
+ if(kind==='student')fields=field('Full name','name',item.name,'text',null,false,true)+field('Roll number','rollNo',item.rollNo||'','number',null,false,true)+field('Class','className',item.className||'',null,classOptions(item.className),false,true)+field('Division','division',item.division||'',null,divisionOptions(item.division),false,true)+field('Gender','gender',item.gender||'Male',null,['Male','Female','Other'].map(v=>`<option ${selected(v,item.gender||'Male')} value="${v}">${v}</option>`).join(''))+field('Date of birth','dob',item.dob||'','date')+field('Email','email',item.email||'','email')+field('Phone','phone',item.phone||'','tel')+field('Address','address',item.address||'','text',null,true)+field('Status','status',item.status||'Active',null,['Active','Inactive'].map(v=>`<option ${selected(v,item.status||'Active')} value="${v}">${v}</option>`).join(''));
+ else if(kind==='teacher')fields=field('Full name','name',item.name,'text',null,false,true)+field('Subject','subject',item.subject,'text',null,false,true)+field('Assigned class','className',item.className||'',null,classOptions(item.className),false,true)+field('Phone','phone',item.phone||'','tel')+field('Email','email',item.email||'','email')+field('Qualification','qualification',item.qualification||'','text')+field('Status','status',item.status||'Active',null,['Active','Inactive'].map(v=>`<option ${selected(v,item.status||'Active')} value="${v}">${v}</option>`).join(''));
+ else if(kind==='fee')fields=field('Student','studentId',item.studentId||'',null,store('students').map(s=>`<option value="${esc(s.id)}" ${selected(s.id,item.studentId)}>${esc(s.name)} — ${esc(s.className)} ${esc(s.division)}</option>`).join(''),true,true)+field('Fee amount (₹)','amount',item.amount??'','number',null,false,true)+field('Paid amount (₹)','paid',item.paid??0,'number',null,false,true)+field('Due date','dueDate',item.dueDate||today(),'date')+field('Academic year','year',item.year||'2026-27')+field('Notes','notes',item.notes||'','text',null,true);
+ else if(kind==='result')fields=field('Student','studentId',item.studentId||'',null,store('students').map(s=>`<option value="${esc(s.id)}" ${selected(s.id,item.studentId)}>${esc(s.name)} — ${esc(s.className)} ${esc(s.division)}</option>`).join(''),true,true)+field('Exam name','examName',item.examName||'Unit Test 1','text',null,false,true)+field('Subject','subject',item.subject||'','text',null,false,true)+field('Marks obtained','marks',item.marks??'','number',null,false,true)+field('Total marks','total',item.total??100,'number',null,false,true)+field('Date','date',item.date||today(),'date');
+ else if(kind==='exam')fields=field('Exam name','name',item.name,'text',null,false,true)+field('Class','className',item.className||'',null,classOptions(item.className),false,true)+field('Start date','startDate',item.startDate||today(),'date',null,false,true)+field('End date','endDate',item.endDate||today(),'date',null,false,true)+field('Status','status',item.status||'Upcoming',null,['Upcoming','Ongoing','Completed'].map(v=>`<option ${selected(v,item.status||'Upcoming')} value="${v}">${v}</option>`).join(''))+field('Notes','notes',item.notes||'','text',null,true);
+ else if(kind==='notice')fields=field('Notice title','title',item.title,'text',null,true,true)+field('Message','message',item.message,'textarea',null,true,true)+field('Audience','audience',item.audience||'All classes',null,['All classes',...CLASS_NAMES].map(v=>`<option ${selected(v,item.audience||'All classes')} value="${v}">${v}</option>`).join(''))+field('Publish date','date',item.date||today(),'date',null,false,true)+field('Status','status',item.status||'Published',null,['Published','Draft'].map(v=>`<option ${selected(v,item.status||'Published')} value="${v}">${v}</option>`).join(''));
+ else if(kind==='class')fields=field('Class','name',item.name||'',null,classOptions(item.name),false,true)+field('Division','division',item.division||'',null,divisionOptions(item.division),false,true)+field('Room','room',item.room||'','text')+field('Class teacher','teacher',item.teacher||'','text');
+ return fields;
 }
-
-function esc(value) {
-  return String(value ?? "").replace(/[&<>"']/g, c => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;",
-    '"': "&quot;", "'": "&#39;"
-  })[c]);
+function openModal(kind,id=null){
+ const singular=kind[0].toUpperCase()+kind.slice(1);const key=kind==='class'?'classes':kind==='fee'?'fees':kind==='result'?'results':kind==='exam'?'exams':kind==='notice'?'notices':kind==='student'?'students':'teachers';
+ const item=id?store(key).find(x=>x.id===id)||{}:{};
+ $('#modalRoot').innerHTML=`<div class="modal-backdrop" data-close-modal><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-head"><h2 id="modalTitle">${id?'Edit':'Add'} ${singular}</h2><button class="modal-close" data-close-modal aria-label="Close">×</button></div><div class="modal-body"><form id="recordForm" data-kind="${kind}" data-id="${id||''}"><div class="form-layout">${formHtml(kind,item)}</div><div class="form-actions"><button type="button" class="btn ghost" data-close-modal>Cancel</button><button class="btn primary" type="submit">Save ${singular}</button></div></form></div></section></div>`;
+ $('#modalRoot').querySelector('.modal-backdrop').addEventListener('click',e=>{if(e.target.hasAttribute('data-close-modal'))$('#modalRoot').innerHTML='';});
+ $('#recordForm').addEventListener('submit',saveForm);
 }
-
-function money(value) {
-  return "₹" + Number(value || 0).toLocaleString("en-IN");
+function saveForm(e){
+ e.preventDefault();const form=e.currentTarget,kind=form.dataset.kind,id=form.dataset.id;const data=Object.fromEntries(new FormData(form).entries());
+ for(const k of ['rollNo','amount','paid','marks','total'])if(data[k]!==undefined&&data[k]!=='')data[k]=Number(data[k]);
+ const keyMap={student:'students',teacher:'teachers',class:'classes',fee:'fees',result:'results',exam:'exams',notice:'notices'};const key=keyMap[kind];let rows=store(key);
+ if(kind==='student'){
+  const dup=rows.some(x=>x.id!==id&&x.className===data.className&&x.division===data.division&&Number(x.rollNo)===Number(data.rollNo));
+  if(dup){toast('That roll number already exists in this class and division.');return;}
+ }
+ if(kind==='class'&&rows.some(x=>x.id!==id&&x.name===data.name&&x.division===data.division)){toast('This class and division already exists.');return;}
+ data.id=id||uid(kind);
+ if(kind==='fee'){data.status=Number(data.paid)>=Number(data.amount)?'Paid':Number(data.paid)>0?'Partial':'Unpaid';}
+ if(kind==='result'){data.percentage=Number(data.total)>0?+(Number(data.marks)/Number(data.total)*100).toFixed(2):0;data.grade=data.percentage>=90?'A+':data.percentage>=80?'A':data.percentage>=70?'B':data.percentage>=60?'C':data.percentage>=40?'D':'F';}
+ if(kind==='notice'&&!data.date)data.date=today();
+ if(id)rows=rows.map(x=>x.id===id?data:x);else rows.unshift(data);
+ save(key,rows);$('#modalRoot').innerHTML='';toast(`${kind[0].toUpperCase()+kind.slice(1)} ${id?'updated':'added'} successfully.`);render();
 }
-
-function notify(message) {
-  const toast = $("#toast");
-  toast.textContent = message;
-  toast.classList.add("show");
-  clearTimeout(notify.timer);
-  notify.timer = setTimeout(() => toast.classList.remove("show"), 2600);
+function deleteRecord(key,id){if(!confirm('Delete this record permanently?'))return;save(key,store(key).filter(x=>x.id!==id));toast('Record deleted.');render();}
+function exportCSV(key){const rows=store(key);if(!rows.length){toast('No records to export.');return;}const cols=[...new Set(rows.flatMap(r=>Object.keys(r)))];const csv=[cols.join(','),...rows.map(r=>cols.map(c=>`"${String(r[c]??'').replace(/"/g,'""')}"`).join(','))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`school-${key}-${today()}.csv`;a.click();URL.revokeObjectURL(url);toast('CSV export downloaded.');}
+function renderDashboard(){
+ const students=store('students'),teachers=store('teachers'),fees=store('fees'),attendance=store('attendance');
+ const collected=fees.reduce((a,f)=>a+Number(f.paid||0),0),due=fees.reduce((a,f)=>a+Math.max(0,Number(f.amount||0)-Number(f.paid||0)),0);
+ const todayAttendance=attendance.filter(a=>a.date===today());const present=todayAttendance.filter(a=>a.status==='Present').length;
+ const chart=CLASS_NAMES.map((c,i)=>{const count=students.filter(s=>s.className===c).length;const h=Math.min(100,count/Math.max(1,...CLASS_NAMES.map(n=>students.filter(s=>s.className===n).length))*100);return `<div class="bar-group"><div class="bar-pair"><div class="bar" style="height:${Math.max(4,h*.68)}%"></div><div class="bar alt" style="height:${Math.max(4,h)}%"></div></div><span class="bar-label">${c}</span></div>`}).join('');
+ const recent=students.slice(-5).reverse().map(s=>`<tr><td>${person(s.name,`Roll No. ${s.rollNo}`)}</td><td>${esc(s.className)} - ${esc(s.division)}</td><td>${pill(s.status)}</td></tr>`).join('');
+ return heading('Dashboard','Here is what is happening at your school today.',`<button class="btn ghost" data-action="export" data-key="students">↓ Export students</button><button class="btn primary" data-action="add" data-kind="student">＋ Add student</button>`)
+ +`<div class="stats-grid">${stat('Total Students',students.length,'♙','tone-blue','Across 6 classes · A–E divisions')}${stat('Total Teachers',teachers.length,'♧','tone-green','Active teaching staff')}${stat('Fees Collected',money(collected),'₹','tone-purple','Total recorded payments')}${stat('Fees Remaining',money(due),'◷','tone-orange','Outstanding fee balance')}</div>`
+ +`<div class="dashboard-grid">${panel('Student distribution','<div class="chart-area">'+chart+'</div><div class="legend"><span><i></i>Students per class</span><span><i class="alt"></i>Class capacity view</span></div>', '<span class="pill active">6 classes</span>')}${panel('Quick actions',`<div class="quick-list"><button class="quick-item" data-action="add" data-kind="student"><span class="quick-icon">♙</span><span><b>Add a student</b><small>Create a student profile</small></span><span class="quick-arrow">›</span></button><button class="quick-item" data-action="add" data-kind="teacher"><span class="quick-icon">♧</span><span><b>Add a teacher</b><small>Update teaching staff</small></span><span class="quick-arrow">›</span></button><button class="quick-item" data-action="page" data-page="attendance"><span class="quick-icon">✓</span><span><b>Mark attendance</b><small>Record today's attendance</small></span><span class="quick-arrow">›</span></button><button class="quick-item" data-action="add" data-kind="notice"><span class="quick-icon">▤</span><span><b>Publish a notice</b><small>Share a school announcement</small></span><span class="quick-arrow">›</span></button></div>`)} </div>`
+ +`<section class="panel table-panel"><div class="table-toolbar"><h3>Recently added students</h3><button class="btn secondary small" data-action="page" data-page="students">View student list →</button></div><div class="table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th>Status</th></tr></thead><tbody>${recent||'<tr><td colspan="3">No students yet.</td></tr>'}</tbody></table></div></section>`;
 }
-
-function dateToday() {
-  return new Date().toLocaleDateString("en-IN", {
-    weekday: "long", year: "numeric", month: "long", day: "numeric"
-  });
+function renderStudents(){
+ const students=store('students');
+ const actions=`<button class="btn ghost" data-action="export" data-key="students">↓ Export CSV</button><button class="btn primary" data-action="student-tab" data-tab="add">＋ Add student</button>`;
+ const intro=heading('Students','Manage student profiles, class assignments and records.',actions);
+ const tabs=`<div class="section-tabs"><button class="tab-btn ${studentTab==='list'?'active':''}" data-action="student-tab" data-tab="list">Student List (${students.length})</button><button class="tab-btn ${studentTab==='add'?'active':''}" data-action="student-tab" data-tab="add">Add Student</button></div>`;
+ if(studentTab==='add')return intro+tabs+`<section class="panel form-card"><div class="panel-head"><h3>Student information</h3><span class="pill active">New record</span></div><form id="inlineStudentForm"><div class="form-layout">${formHtml('student')}</div><div class="form-actions"><button class="btn ghost" type="reset">Clear form</button><button class="btn primary" type="submit">Save student</button></div></form></section>`;
+ const filters=`<select class="filter-select" id="classFilter">${classOptions('',true)}</select><select class="filter-select" id="divisionFilter">${divisionOptions('',true)}</select>`;
+ const rows=students.map(s=>`<tr data-search="${esc([s.name,s.email,s.className,s.division,s.rollNo,s.phone].join(' ').toLowerCase())}" data-class="${esc(s.className)}" data-division="${esc(s.division)}"><td>${person(s.name,s.email||`Roll No. ${s.rollNo}`)}</td><td>${esc(s.rollNo)}</td><td>${esc(s.className)} - ${esc(s.division)}</td><td>${esc(s.gender||'—')}</td><td>${esc(s.phone||'—')}</td><td>${pill(s.status)}</td><td><div class="actions"><button class="action-btn" data-action="edit" data-kind="student" data-id="${esc(s.id)}" aria-label="Edit student">✎</button><button class="action-btn" data-action="delete" data-key="students" data-id="${esc(s.id)}" aria-label="Delete student">⌫</button></div></td></tr>`).join('');
+ return intro+tabs+tablePanel('All students','Search name, roll no, email…',filters,'<th>Student</th><th>Roll No.</th><th>Class</th><th>Gender</th><th>Phone</th><th>Status</th><th>Actions</th>',rows,'No students found.');
 }
-
-function seedData() {
-  let students = read("students");
-  let teachers = read("teachers");
-  let classes = read("classes");
-
-  // Create the initial demo data only if these stores are empty.
-  if (classes.length === 0) {
-    classes = [];
-    CLASS_NAMES.forEach(className => {
-      DIVISIONS.forEach(division => {
-        classes.push({
-          id: uid(),
-          className,
-          division,
-          room: `${className}-${division}`
-        });
-      });
-    });
-    save("classes", classes);
-  }
-
-  if (students.length === 0) {
-    students = [];
-    let index = 0;
-
-    CLASS_NAMES.forEach(className => {
-      DIVISIONS.forEach(division => {
-        for (let n = 0; n < 10; n++) {
-          const first = FIRST_NAMES[index % FIRST_NAMES.length];
-          const last = LAST_NAMES[(index * 7 + n * 3) % LAST_NAMES.length];
-          const gender = (index % 2 === 0) ? "Male" : "Female";
-
-          students.push({
-            id: uid(),
-            rollNo: n + 1,
-            name: `${first} ${last}`,
-            gender,
-            className,
-            division,
-            dob: "",
-            email: `student${index + 1}@school.demo`,
-            phone: `90000${String(10000 + index).slice(-5)}`,
-            address: "Maharashtra",
-            status: "Active"
-          });
-          index++;
-        }
-      });
-    });
-
-    save("students", students);
-  }
-
-  if (teachers.length === 0) {
-    teachers = CLASS_NAMES.map((className, i) => ({
-      id: uid(),
-      name: TEACHER_NAMES[i],
-      subject: SUBJECTS[i],
-      className,
-      email: `teacher${i + 1}@school.demo`,
-      phone: `91111${String(10000 + i).slice(-5)}`
-    }));
-    save("teachers", teachers);
-  }
-
-  // Initialize other modules without overwriting existing data.
-  ["attendance", "fees", "results", "exams", "notices"].forEach(key => {
-    if (localStorage.getItem(KEYS[key]) === null) save(key, []);
-  });
+function renderTeachers(){
+ const teachers=store('teachers'),actions=`<button class="btn ghost" data-action="export" data-key="teachers">↓ Export CSV</button><button class="btn primary" data-action="teacher-tab" data-tab="add">＋ Add teacher</button>`;
+ const intro=heading('Teachers','Manage teacher profiles, subjects and class assignments.',actions);
+ const tabs=`<div class="section-tabs"><button class="tab-btn ${teacherTab==='list'?'active':''}" data-action="teacher-tab" data-tab="list">Teacher List (${teachers.length})</button><button class="tab-btn ${teacherTab==='add'?'active':''}" data-action="teacher-tab" data-tab="add">Add Teacher</button></div>`;
+ if(teacherTab==='add')return intro+tabs+`<section class="panel form-card"><div class="panel-head"><h3>Teacher information</h3><span class="pill active">New record</span></div><form id="inlineTeacherForm"><div class="form-layout">${formHtml('teacher')}</div><div class="form-actions"><button class="btn ghost" type="reset">Clear form</button><button class="btn primary" type="submit">Save teacher</button></div></form></section>`;
+ const rows=teachers.map(t=>`<tr data-search="${esc([t.name,t.subject,t.className,t.email,t.phone].join(' ').toLowerCase())}"><td>${person(t.name,t.email)}</td><td>${esc(t.subject||'—')}</td><td>${esc(t.className||'—')}</td><td>${esc(t.qualification||'—')}</td><td>${esc(t.phone||'—')}</td><td>${pill(t.status)}</td><td><div class="actions"><button class="action-btn" data-action="edit" data-kind="teacher" data-id="${esc(t.id)}">✎</button><button class="action-btn" data-action="delete" data-key="teachers" data-id="${esc(t.id)}">⌫</button></div></td></tr>`).join('');
+ return intro+tabs+tablePanel('All teachers','Search teacher, subject, class…','', '<th>Teacher</th><th>Subject</th><th>Class</th><th>Qualification</th><th>Phone</th><th>Status</th><th>Actions</th>',rows,'No teachers found.');
 }
-
-let currentPage = "dashboard";
-let currentStudentFilter = { className: "All", division: "All", search: "" };
-let currentTeacherFilter = { className: "All", search: "" };
-
-function openModal(title, content) {
-  $("#mTitle").textContent = title;
-  $("#mBody").innerHTML = content;
-  $("#modal").classList.remove("hidden");
+function renderClasses(){
+ const classes=store('classes');
+ const rows=classes.map(c=>`<tr data-search="${esc([c.name,c.division,c.room,c.teacher].join(' ').toLowerCase())}"><td><b>${esc(c.name)}</b></td><td><span class="pill active">${esc(c.division)}</span></td><td>${esc(c.room||'—')}</td><td>${store('students').filter(s=>s.className===c.name&&s.division===c.division).length}</td><td>${esc(c.teacher||store('teachers').find(t=>t.className===c.name)?.name||'—')}</td><td><div class="actions"><button class="action-btn" data-action="edit" data-kind="class" data-id="${esc(c.id)}">✎</button></div></td></tr>`).join('');
+ return heading('Classes','Class structure for standards 5th–10th and divisions A–E.',`<button class="btn ghost" data-action="export" data-key="classes">↓ Export CSV</button><button class="btn primary" data-action="add" data-kind="class">＋ Add class</button>`)+`<div class="stats-grid">${stat('Standards',6,'▤','tone-blue','5th through 10th')}${stat('Divisions',5,'▦','tone-green','A, B, C, D and E')}${stat('Class sections',classes.length,'⌂','tone-purple','Configured class divisions')}${stat('Students',store('students').length,'♙','tone-orange','Across all class sections')}</div>`+tablePanel('Class & division list','Search class, division, room…','', '<th>Class</th><th>Division</th><th>Room</th><th>Students</th><th>Class teacher</th><th>Actions</th>',rows);
 }
-
-function closeModal() {
-  $("#modal").classList.add("hidden");
-  $("#mBody").innerHTML = "";
+function renderAttendance(){
+ const students=store('students'),records=store('attendance');
+ const date=$('#attendanceDate')?.value||today(),cl=$('#attendanceClass')?.value||'',div=$('#attendanceDivision')?.value||'';
+ const list=students.filter(s=>(!cl||s.className===cl)&&(!div||s.division===div));
+ const statusMap=new Map(records.filter(r=>r.date===date).map(r=>[r.studentId,r.status]));
+ const rows=list.map(s=>`<tr><td>${person(s.name,`Roll No. ${s.rollNo}`)}</td><td>${esc(s.className)} - ${esc(s.division)}</td><td><select class="filter-select attendance-status" data-student="${esc(s.id)}"><option ${selected(statusMap.get(s.id)||'Present','Present')} value="Present">Present</option><option ${selected(statusMap.get(s.id)||'Present','Absent')} value="Absent">Absent</option><option ${selected(statusMap.get(s.id)||'Present','Late')} value="Late">Late</option></select></td></tr>`).join('');
+ return heading('Attendance','Record and review daily student attendance.',`<button class="btn ghost" data-action="export" data-key="attendance">↓ Export CSV</button>`)+`<section class="panel"><div class="attendance-toolbar"><label>Date <input type="date" id="attendanceDate" value="${date}"></label><label>Class <select id="attendanceClass">${classOptions(cl,true)}</select></label><label>Division <select id="attendanceDivision">${divisionOptions(div,true)}</select></label><button class="btn primary" id="saveAttendance">Save attendance</button></div><div class="mini-summary"><span>Students shown: <b>${list.length}</b></span><span>Already recorded today: <b>${statusMap.size}</b></span></div></section><div style="height:14px"></div>`+tablePanel('Attendance register','Search student name…','', '<th>Student</th><th>Class</th><th>Attendance status</th>',rows,'No students match this class filter.');
 }
-
-function table(headers, rows) {
-  if (!rows.length) return `<div class="empty">No records found.</div>`;
-  return `
-    <div class="table-wrap">
-      <table>
-        <thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>
-        <tbody>${rows.join("")}</tbody>
-      </table>
-    </div>`;
+function renderFees(){
+ const fees=store('fees'),students=store('students'),total=fees.reduce((a,f)=>a+Number(f.amount||0),0),paid=fees.reduce((a,f)=>a+Number(f.paid||0),0),due=Math.max(0,total-paid);
+ const rows=fees.map(f=>{const s=students.find(x=>x.id===f.studentId);return `<tr data-search="${esc([s?.name,f.year,f.status,f.notes].join(' ').toLowerCase())}"><td>${person(s?.name||'Unknown student',s?`${s.className} - ${s.division}`:'Student removed')}</td><td>${money(f.amount)}</td><td>${money(f.paid)}</td><td>${money(Math.max(0,Number(f.amount)-Number(f.paid)))}</td><td>${niceDate(f.dueDate)}</td><td>${pill(f.status)}</td><td><div class="actions"><button class="action-btn" data-action="edit" data-kind="fee" data-id="${esc(f.id)}">✎</button><button class="action-btn" data-action="delete" data-key="fees" data-id="${esc(f.id)}">⌫</button></div></td></tr>`}).join('');
+ return heading('Fees management','Track fees, payments and outstanding balances.',`<button class="btn ghost" data-action="export" data-key="fees">↓ Export CSV</button><button class="btn primary" data-action="add" data-kind="fee">＋ Add fee record</button>`)+`<div class="stats-grid">${stat('Total fees',money(total),'₹','tone-blue','Recorded fee amounts')}${stat('Collected',money(paid),'✓','tone-green','Payments received')}${stat('Outstanding',money(due),'◷','tone-orange','Remaining balance')}${stat('Fee records',fees.length,'▤','tone-purple','Student fee entries')}</div>`+tablePanel('Fee register','Search student, status, year…','', '<th>Student</th><th>Fee amount</th><th>Paid</th><th>Remaining</th><th>Due date</th><th>Status</th><th>Actions</th>',rows,'No fee records yet.');
 }
-
-function classOptions(selected = "", includeAll = false) {
-  const classes = includeAll ? ["All", ...CLASS_NAMES] : CLASS_NAMES;
-  return classes.map(c =>
-    `<option value="${esc(c)}" ${c === selected ? "selected" : ""}>${esc(c === "All" ? "All Classes" : c)}</option>`
-  ).join("");
+function renderResults(){
+ const results=store('results'),students=store('students');
+ const rows=results.map(r=>{const s=students.find(x=>x.id===r.studentId);return `<tr data-search="${esc([s?.name,r.examName,r.subject,r.grade].join(' ').toLowerCase())}"><td>${person(s?.name||'Unknown student',s?`${s.className} - ${s.division}`:'Student removed')}</td><td>${esc(r.examName)}</td><td>${esc(r.subject)}</td><td>${esc(r.marks)} / ${esc(r.total)}</td><td>${Number(r.percentage||0).toFixed(1)}%</td><td><span class="pill ${r.grade==='F'?'absent':'active'}">${esc(r.grade||'—')}</span></td><td><div class="actions"><button class="action-btn" data-action="edit" data-kind="result" data-id="${esc(r.id)}">✎</button><button class="action-btn" data-action="delete" data-key="results" data-id="${esc(r.id)}">⌫</button></div></td></tr>`}).join('');
+ return heading('Results & marks','Enter subject marks and automatically calculate percentage and grade.',`<button class="btn ghost" data-action="export" data-key="results">↓ Export CSV</button><button class="btn primary" data-action="add" data-kind="result">＋ Add result</button>`)+tablePanel('Result register','Search student, exam, subject…','', '<th>Student</th><th>Exam</th><th>Subject</th><th>Marks</th><th>Percentage</th><th>Grade</th><th>Actions</th>',rows,'No results recorded yet.');
 }
-
-function divisionOptions(selected = "", includeAll = false) {
-  const divisions = includeAll ? ["All", ...DIVISIONS] : DIVISIONS;
-  return divisions.map(d =>
-    `<option value="${esc(d)}" ${d === selected ? "selected" : ""}>${esc(d === "All" ? "All Divisions" : d)}</option>`
-  ).join("");
+function renderExams(){
+ const exams=store('exams'),rows=exams.map(x=>`<tr data-search="${esc([x.name,x.className,x.status].join(' ').toLowerCase())}"><td><b>${esc(x.name)}</b></td><td>${esc(x.className)}</td><td>${niceDate(x.startDate)}</td><td>${niceDate(x.endDate)}</td><td>${pill(x.status)}</td><td><div class="actions"><button class="action-btn" data-action="edit" data-kind="exam" data-id="${esc(x.id)}">✎</button><button class="action-btn" data-action="delete" data-key="exams" data-id="${esc(x.id)}">⌫</button></div></td></tr>`).join('');
+ return heading('Exams','Plan exams, dates and class schedules.',`<button class="btn primary" data-action="add" data-kind="exam">＋ Schedule exam</button>`)+tablePanel('Exam schedule','Search exam or class…','', '<th>Exam</th><th>Class</th><th>Start date</th><th>End date</th><th>Status</th><th>Actions</th>',rows,'No exams scheduled yet.');
 }
-
-function studentName(id) {
-  const s = read("students").find(x => x.id === id);
-  return s ? s.name : "Unknown Student";
+function renderNotices(){
+ const notices=store('notices');
+ const cards=notices.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(n=>`<article class="notice-card"><div class="notice-icon">▤</div><div style="flex:1"><h4>${esc(n.title)}</h4><p>${esc(n.message)}</p><div class="notice-meta">${esc(n.audience||'All classes')} · ${niceDate(n.date)} · ${pill(n.status)}</div></div><div class="actions"><button class="action-btn" data-action="edit" data-kind="notice" data-id="${esc(n.id)}">✎</button><button class="action-btn" data-action="delete" data-key="notices" data-id="${esc(n.id)}">⌫</button></div></article>`).join('');
+ return heading('Notices & announcements','Publish important updates for students and school staff.',`<button class="btn primary" data-action="add" data-kind="notice">＋ Create notice</button>`)+`<section class="panel"><div class="panel-head"><h3>All notices</h3><span class="pill active">${notices.length} total</span></div><div class="notice-list">${cards||'<div class="empty-state"><strong>No notices yet</strong>Create a notice to display it here.</div>'}</div></section>`;
 }
-
-function renderDashboard() {
-  const students = read("students");
-  const teachers = read("teachers");
-  const classes = read("classes");
-  const attendance = read("attendance");
-  const fees = read("fees");
-  const notices = read("notices");
-
-  const totalFees = fees.reduce((sum, f) => sum + Number(f.total || 0), 0);
-  const paidFees = fees.reduce((sum, f) => sum + Number(f.paid || 0), 0);
-
-  $("#view").innerHTML = `
-    <div class="welcome">
-      <h1>Welcome to EduManage 👋</h1>
-      <p>Manage students, teachers, classes, attendance and school records in one place.</p>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-card"><span class="stat-icon">👨‍🎓</span><small>Total Students</small><h2>${students.length}</h2></div>
-      <div class="stat-card"><span class="stat-icon">👩‍🏫</span><small>Total Teachers</small><h2>${teachers.length}</h2></div>
-      <div class="stat-card"><span class="stat-icon">🏫</span><small>Class Divisions</small><h2>${classes.length}</h2></div>
-      <div class="stat-card"><span class="stat-icon">📢</span><small>Notices</small><h2>${notices.length}</h2></div>
-    </div>
-
-    <div class="grid-2">
-      <div class="panel">
-        <div class="panel-head"><h3>Class Overview</h3><span class="badge">5th–10th</span></div>
-        <div class="division-grid">
-          ${CLASS_NAMES.map(c => `
-            <div class="division-card">
-              <h3>${c}</h3>
-              <strong>${students.filter(s => s.className === c).length}</strong>
-              <div class="muted">Students</div>
-            </div>`).join("")}
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-head"><h3>School Summary</h3></div>
-        <p>📋 Attendance records: <strong>${attendance.length}</strong></p>
-        <p>💰 Fees recorded: <strong>${money(totalFees)}</strong></p>
-        <p>✅ Fees paid: <strong>${money(paidFees)}</strong></p>
-        <p>⏳ Fees remaining: <strong>${money(Math.max(0, totalFees - paidFees))}</strong></p>
-        <p>👩‍🏫 One teacher assigned to each class.</p>
-        <button class="btn primary" data-page="students">View Students →</button>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-head"><h3>Recently Added Students</h3><button class="btn primary" data-page="students">View All</button></div>
-      ${table(["Roll No.", "Student Name", "Class", "Division", "Status"],
-        students.slice(-8).reverse().map(s => `
-          <tr>
-            <td>${s.rollNo}</td><td><strong>${esc(s.name)}</strong></td>
-            <td>${esc(s.className)}</td><td><span class="badge">${esc(s.division)}</span></td>
-            <td><span class="badge green">${esc(s.status || "Active")}</span></td>
-          </tr>`))}
-    </div>`;
+function renderReports(){
+ const students=store('students'),teachers=store('teachers'),fees=store('fees'),results=store('results'),attendance=store('attendance');
+ const total=fees.reduce((a,f)=>a+Number(f.amount||0),0),paid=fees.reduce((a,f)=>a+Number(f.paid||0),0),pct=total?Math.round(paid/total*100):0;
+ const byClass=CLASS_NAMES.map(c=>{const count=students.filter(s=>s.className===c).length;return `<div class="report-card"><h3>${c} students</h3><div class="report-number">${count}</div><p>Student profiles currently registered in ${c}.</p><div class="progress"><span style="width:${Math.min(100,count/Math.max(1,...CLASS_NAMES.map(n=>students.filter(s=>s.className===n).length))*100)}%"></span></div></div>`}).join('');
+ return heading('Reports & analytics','A quick overview of school records. Export individual sections as CSV.')+`<div class="stats-grid">${stat('Students',students.length,'♙','tone-blue','All registered students')}${stat('Teachers',teachers.length,'♧','tone-green','Teacher profiles')}${stat('Result records',results.length,'✧','tone-purple','Marks entered')}${stat('Attendance entries',attendance.length,'✓','tone-orange','Saved attendance records')}</div><section class="panel"><div class="panel-head"><h3>Fee collection progress</h3><b>${pct}%</b></div><div class="progress" style="height:10px"><span style="width:${pct}%"></span></div><div class="mini-summary"><span>Total fees: <b>${money(total)}</b></span><span>Collected: <b>${money(paid)}</b></span><span>Remaining: <b>${money(Math.max(0,total-paid))}</b></span></div></section><div style="height:17px"></div><div class="report-cards">${byClass}</div><div style="height:18px"></div><section class="panel"><div class="panel-head"><h3>Export your records</h3><span class="muted">CSV files open in Excel or Google Sheets</span></div><div class="heading-actions">${Object.keys(KEY).map(k=>`<button class="btn ghost small" data-action="export" data-key="${k}">↓ ${k[0].toUpperCase()+k.slice(1)}</button>`).join('')}</div></section>`;
 }
-
-function studentForm(s = {}) {
-  return `
-    <form id="studentForm" class="form-grid">
-      <input type="hidden" name="id" value="${esc(s.id || "")}">
-      <div class="form-group"><label>Student Name *</label><input name="name" required value="${esc(s.name || "")}" placeholder="Full name"></div>
-      <div class="form-group"><label>Gender *</label>
-        <select name="gender" required>
-          <option value="">Select Gender</option>
-          ${["Male", "Female", "Other"].map(g => `<option ${s.gender === g ? "selected" : ""}>${g}</option>`).join("")}
-        </select>
-      </div>
-      <div class="form-group"><label>Class *</label><select name="className" required>${classOptions(s.className || "5th")}</select></div>
-      <div class="form-group"><label>Division *</label><select name="division" required>${divisionOptions(s.division || "A")}</select></div>
-      <div class="form-group"><label>Roll Number *</label><input name="rollNo" type="number" min="1" required value="${esc(s.rollNo || "")}"></div>
-      <div class="form-group"><label>Date of Birth</label><input name="dob" type="date" value="${esc(s.dob || "")}"></div>
-      <div class="form-group"><label>Email</label><input name="email" type="email" value="${esc(s.email || "")}"></div>
-      <div class="form-group"><label>Phone</label><input name="phone" type="tel" value="${esc(s.phone || "")}"></div>
-      <div class="form-group full-width"><label>Address</label><input name="address" value="${esc(s.address || "")}"></div>
-      <div class="form-actions">
-        <button class="btn primary" type="submit">Save Student</button>
-        <button class="btn" type="button" id="cancelForm">Cancel</button>
-      </div>
-    </form>`;
+function render(){
+ const pages={dashboard:renderDashboard,students:renderStudents,teachers:renderTeachers,classes:renderClasses,attendance:renderAttendance,fees:renderFees,results:renderResults,exams:renderExams,notices:renderNotices,reports:renderReports};
+ $('#pageContent').innerHTML=(pages[currentPage]||renderDashboard)();
+ $('#navStudentCount').textContent=store('students').length;
+ $('#todayText').textContent=new Date().toLocaleDateString('en-IN',{weekday:'short',day:'2-digit',month:'short'});
+ $('#year').textContent=new Date().getFullYear();
+ const search=$('#tableSearch');if(search)search.addEventListener('input',filterTable);
+ ['classFilter','divisionFilter'].forEach(id=>{const el=$('#'+id);if(el)el.addEventListener('change',filterTable);});
+ const sf=$('#inlineStudentForm');if(sf)sf.addEventListener('submit',e=>{e.preventDefault();saveInline('student',sf);});
+ const tf=$('#inlineTeacherForm');if(tf)tf.addEventListener('submit',e=>{e.preventDefault();saveInline('teacher',tf);});
+ const saveAtt=$('#saveAttendance');if(saveAtt)saveAtt.addEventListener('click',saveAttendance);
+ ['attendanceDate','attendanceClass','attendanceDivision'].forEach(id=>{const el=$('#'+id);if(el)el.addEventListener('change',render);});
 }
-
-function renderStudents() {
-  const students = read("students");
-  const list = students.filter(s =>
-    (currentStudentFilter.className === "All" || s.className === currentStudentFilter.className) &&
-    (currentStudentFilter.division === "All" || s.division === currentStudentFilter.division) &&
-    `${s.name} ${s.className} ${s.division} ${s.rollNo}`.toLowerCase().includes(currentStudentFilter.search.toLowerCase())
-  );
-
-  $("#view").innerHTML = `
-    <div class="section-head">
-      <div><h2>Students</h2><p class="muted">Manage all student records and class divisions.</p></div>
-      <button class="btn primary" data-action="add-student">＋ Add Student</button>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-card"><small>Total Students</small><h2>${students.length}</h2></div>
-      <div class="stat-card"><small>Classes</small><h2>6</h2></div>
-      <div class="stat-card"><small>Divisions</small><h2>30</h2></div>
-      <div class="stat-card"><small>Students per Division</small><h2>10*</h2></div>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3>Student List</h3><span class="badge">${list.length} records</span></div>
-      <div class="toolbar">
-        <input id="studentSearch" placeholder="Search student name or roll no..." value="${esc(currentStudentFilter.search)}">
-        <select id="studentClassFilter">${classOptions(currentStudentFilter.className, true)}</select>
-        <select id="studentDivisionFilter">${divisionOptions(currentStudentFilter.division, true)}</select>
-        <button class="btn" data-action="reset-student-filter">Reset</button>
-      </div>
-      ${table(["Roll No.", "Name", "Class", "Division", "Gender", "Phone", "Actions"],
-        list.map(s => `
-          <tr>
-            <td>${esc(s.rollNo)}</td>
-            <td><strong>${esc(s.name)}</strong><br><small class="muted">${esc(s.email || "")}</small></td>
-            <td>${esc(s.className)}</td>
-            <td><span class="badge">${esc(s.division)}</span></td>
-            <td>${esc(s.gender)}</td>
-            <td>${esc(s.phone || "-")}</td>
-            <td><div class="actions">
-              <button class="small-btn" data-action="edit-student" data-id="${esc(s.id)}">Edit</button>
-              <button class="small-btn danger" data-action="delete-student" data-id="${esc(s.id)}">Delete</button>
-            </div></td>
-          </tr>`))}
-    </div>`;
+function filterTable(){const q=($('#tableSearch')?.value||'').toLowerCase();const cl=$('#classFilter')?.value||'',div=$('#divisionFilter')?.value||'';let shown=0;$$('#tableRows tr').forEach(tr=>{const ok=(tr.dataset.search||tr.textContent.toLowerCase()).includes(q)&&(!cl||tr.dataset.class===cl)&&(!div||tr.dataset.division===div);tr.style.display=ok?'':'none';if(ok)shown++;});const old=$('.filtered-empty');if(old)old.remove();if(shown===0&&$('#tableRows'))$('#tableRows').closest('.table-wrap').insertAdjacentHTML('beforeend','<div class="empty-state filtered-empty"><strong>No matching records</strong>Try a different search or filter.</div>');}
+function saveInline(kind,form){const data=Object.fromEntries(new FormData(form).entries());for(const k of ['rollNo'])if(data[k])data[k]=Number(data[k]);const key=kind==='student'?'students':'teachers';const rows=store(key);if(kind==='student'&&rows.some(s=>s.className===data.className&&s.division===data.division&&Number(s.rollNo)===Number(data.rollNo))){toast('That roll number already exists in this class and division.');return;}data.id=uid(kind);rows.push(data);save(key,rows);if(kind==='student')studentTab='list';else teacherTab='list';toast(`${kind==='student'?'Student':'Teacher'} added successfully.`);render();}
+function saveAttendance(){
+ const date=$('#attendanceDate').value||today(),rows=store('attendance'),stamp=new Date().toISOString();
+ $$('.attendance-status').forEach(el=>{const studentId=el.dataset.student;const old=rows.findIndex(r=>r.studentId===studentId&&r.date===date);const rec={id:old>=0?rows[old].id:uid('att'),studentId,date,status:el.value,updatedAt:stamp};if(old>=0)rows[old]=rec;else rows.push(rec);});
+ save('attendance',rows);toast('Attendance saved successfully.');render();
 }
-
-function renderTeachers() {
-  const teachers = read("teachers");
-  const filter = currentTeacherFilter;
-  const list = teachers.filter(t =>
-    (filter.className === "All" || t.className === filter.className) &&
-    `${t.name} ${t.subject} ${t.className}`.toLowerCase().includes(filter.search.toLowerCase())
-  );
-
-  $("#view").innerHTML = `
-    <div class="section-head">
-      <div><h2>Teachers</h2><p class="muted">One class teacher assigned to each class.</p></div>
-      <button class="btn primary" data-action="add-teacher">＋ Add Teacher</button>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-card"><small>Total Teachers</small><h2>${teachers.length}</h2></div>
-      <div class="stat-card"><small>Classes</small><h2>6</h2></div>
-      <div class="stat-card"><small>Subjects</small><h2>${new Set(teachers.map(t => t.subject)).size}</h2></div>
-      <div class="stat-card"><small>Class Teacher Ratio</small><h2>1 : 1</h2></div>
-    </div>
-    <div class="panel">
-      <div class="panel-head"><h3>Teacher List</h3><span class="badge">${list.length} records</span></div>
-      <div class="toolbar">
-        <input id="teacherSearch" placeholder="Search teacher..." value="${esc(filter.search)}">
-        <select id="teacherClassFilter">${classOptions(filter.className, true)}</select>
-        <button class="btn" data-action="reset-teacher-filter">Reset</button>
-      </div>
-      ${table(["Teacher Name", "Class", "Subject", "Email", "Phone", "Actions"],
-        list.map(t => `
-          <tr>
-            <td><strong>${esc(t.name)}</strong></td><td>${esc(t.className)}</td>
-            <td>${esc(t.subject)}</td><td>${esc(t.email || "-")}</td>
-            <td>${esc(t.phone || "-")}</td>
-            <td><div class="actions">
-              <button class="small-btn" data-action="edit-teacher" data-id="${esc(t.id)}">Edit</button>
-              <button class="small-btn danger" data-action="delete-teacher" data-id="${esc(t.id)}">Delete</button>
-            </div></td>
-          </tr>`))}
-    </div>`;
-}
-
-function renderClasses() {
-  const students = read("students");
-  const teachers = read("teachers");
-  const classes = read("classes");
-
-  $("#view").innerHTML = `
-    <div class="section-head">
-      <div><h2>Classes & Divisions</h2><p class="muted">Six classes with five divisions each.</p></div>
-    </div>
-    <div class="stats-grid">
-      <div class="stat-card"><small>Total Classes</small><h2>6</h2></div>
-      <div class="stat-card"><small>Total Divisions</small><h2>${classes.length}</h2></div>
-      <div class="stat-card"><small>Total Students</small><h2>${students.length}</h2></div>
-      <div class="stat-card"><small>Total Teachers</small><h2>${teachers.length}</h2></div>
-    </div>
-    ${CLASS_NAMES.map(c => `
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Class ${c}</h3>
-          <span class="badge">${students.filter(s => s.className === c).length} students</span>
-        </div>
-        <div class="division-grid">
-          ${DIVISIONS.map(d => {
-            const count = students.filter(s => s.className === c && s.division === d).length;
-            return `<div class="division-card">
-              <h3>Division ${d}</h3>
-              <strong>${count}</strong>
-              <div class="muted">Students</div>
-              <button class="small-btn" data-action="view-division" data-class="${c}" data-division="${d}">View Students</button>
-            </div>`;
-          }).join("")}
-        </div>
-        <p class="muted">Class Teacher: ${esc(teachers.find(t => t.className === c)?.name || "Not assigned")}</p>
-      </div>`).join("")}`;
-}
-
-function renderAttendance() {
-  const students = read("students");
-  const records = read("attendance");
-  $("#view").innerHTML = `
-    <div class="section-head"><div><h2>Attendance</h2><p class="muted">Record student attendance by date.</p></div></div>
-    <div class="panel">
-      <form id="attendanceForm" class="form-grid">
-        <div class="form-group"><label>Date</label><input type="date" name="date" required value="${new Date().toISOString().slice(0, 10)}"></div>
-        <div class="form-group"><label>Class</label><select name="className" required>${classOptions("5th")}</select></div>
-        <div class="form-group"><label>Division</label><select name="division" required>${divisionOptions("A")}</select></div>
-        <div class="form-group"><label>Student</label><select name="studentId" required>
-          ${students.map(s => `<option value="${esc(s.id)}">${esc(s.name)} — ${s.className} ${s.division}</option>`).join("")}
-        </select></div>
-        <div class="form-group"><label>Status</label><select name="status"><option>Present</option><option>Absent</option><option>Late</option></select></div>
-        <div class="form-actions"><button class="btn primary">Save Attendance</button></div>
-      </form>
-    </div>
-    <div class="panel"><h3>Attendance Records</h3>
-      ${table(["Date", "Student", "Class", "Division", "Status"],
-        records.slice().reverse().map(r => {
-          const s = students.find(x => x.id === r.studentId);
-          return `<tr><td>${esc(r.date)}</td><td>${esc(s?.name || r.studentName || "Unknown")}</td>
-          <td>${esc(r.className)}</td><td>${esc(r.division)}</td><td><span class="badge ${r.status === "Present" ? "green" : "red"}">${esc(r.status)}</span></td></tr>`;
-        }))}
-    </div>`;
-}
-
-function renderFees() {
-  const fees = read("fees");
-  const students = read("students");
-  const total = fees.reduce((sum, f) => sum + Number(f.total || 0), 0);
-  const paid = fees.reduce((sum, f) => sum + Number(f.paid || 0), 0);
-
-  $("#view").innerHTML = `
-    <div class="section-head"><div><h2>Fees Management</h2><p class="muted">Track total fees, paid amount and balance.</p></div></div>
-    <div class="stats-grid">
-      <div class="stat-card"><small>Total Fees</small><h2>${money(total)}</h2></div>
-      <div class="stat-card"><small>Collected</small><h2>${money(paid)}</h2></div>
-      <div class="stat-card"><small>Remaining</small><h2>${money(Math.max(0, total - paid))}</h2></div>
-      <div class="stat-card"><small>Fee Records</small><h2>${fees.length}</h2></div>
-    </div>
-    <div class="panel">
-      <h3>Add Fee Record</h3><br>
-      <form id="feeForm" class="form-grid">
-        <div class="form-group full-width"><label>Student</label><select name="studentId" required>
-          ${students.map(s => `<option value="${esc(s.id)}">${esc(s.name)} — ${s.className} ${s.division}</option>`).join("")}
-        </select></div>
-        <div class="form-group"><label>Total Fees (₹)</label><input name="total" type="number" min="0" required></div>
-        <div class="form-group"><label>Paid Amount (₹)</label><input name="paid" type="number" min="0" required></div>
-        <div class="form-actions"><button class="btn primary">Save Fee</button></div>
-      </form>
-    </div>
-    <div class="panel"><h3>Fee Records</h3><br>
-      ${table(["Student", "Class", "Total", "Paid", "Remaining", "Status"],
-        fees.map(f => {
-          const s = students.find(x => x.id === f.studentId);
-          const remain = Math.max(0, Number(f.total) - Number(f.paid));
-          return `<tr><td>${esc(s?.name || f.studentName || "Unknown")}</td>
-          <td>${esc(s ? `${s.className} ${s.division}` : "-")}</td>
-          <td>${money(f.total)}</td><td>${money(f.paid)}</td><td>${money(remain)}</td>
-          <td><span class="badge ${remain === 0 ? "green" : "red"}">${remain === 0 ? "Paid" : "Pending"}</span></td></tr>`;
-        }))}
-    </div>`;
-}
-
-function renderResults() {
-  const results = read("results");
-  const students = read("students");
-  $("#view").innerHTML = `
-    <div class="section-head"><div><h2>Results</h2><p class="muted">Enter marks and calculate percentage.</p></div></div>
-    <div class="panel">
-      <form id="resultForm" class="form-grid">
-        <div class="form-group full-width"><label>Student</label><select name="studentId" required>
-          ${students.map(s => `<option value="${esc(s.id)}">${esc(s.name)} — ${s.className} ${s.division}</option>`).join("")}
-        </select></div>
-        <div class="form-group"><label>Exam Name</label><input name="examName" required placeholder="Unit Test 1"></div>
-        ${["Maths", "English", "Science", "Computer", "Social"].map(subject => `
-          <div class="form-group"><label>${subject} Marks (out of 100)</label>
-          <input type="number" name="${subject.toLowerCase()}" min="0" max="100" required value="0"></div>`).join("")}
-        <div class="form-actions"><button class="btn primary">Save Result</button></div>
-      </form>
-    </div>
-    <div class="panel"><h3>Result List</h3><br>
-      ${table(["Student", "Exam", "Total / 500", "Percentage", "Grade"],
-        results.map(r => {
-          const s = students.find(x => x.id === r.studentId);
-          const marks = ["maths", "english", "science", "computer", "social"].reduce((sum, k) => sum + Number(r[k] || 0), 0);
-          const pct = marks / 5;
-          const grade = pct >= 90 ? "A+" : pct >= 75 ? "A" : pct >= 60 ? "B" : pct >= 40 ? "C" : "Needs Improvement";
-          return `<tr><td>${esc(s?.name || "Unknown")}</td><td>${esc(r.examName)}</td>
-          <td>${marks}/500</td><td>${pct.toFixed(2)}%</td><td><span class="badge">${grade}</span></td></tr>`;
-        }))}
-    </div>`;
-}
-
-function renderExams() {
-  const exams = read("exams");
-  $("#view").innerHTML = `
-    <div class="section-head"><div><h2>Exams</h2><p class="muted">Create and manage examination schedules.</p></div>
-      <button class="btn primary" data-action="add-exam">＋ Add Exam</button>
-    </div>
-    <div class="panel">
-      ${table(["Exam", "Class", "Subject", "Date", "Time", "Duration", "Max Marks", "Actions"],
-        exams.map(e => `<tr><td>${esc(e.examName)}</td><td>${esc(e.className)}</td><td>${esc(e.subject)}</td>
-          <td>${esc(e.date)}</td><td>${esc(e.time)}</td><td>${esc(e.duration)} min</td><td>${esc(e.maxMarks)}</td>
-          <td><button class="small-btn danger" data-action="delete-exam" data-id="${esc(e.id)}">Delete</button></td></tr>`))}
-    </div>`;
-}
-
-function renderNotices() {
-  const notices = read("notices");
-  $("#view").innerHTML = `
-    <div class="section-head"><div><h2>Notice Board</h2><p class="muted">Share important school announcements.</p></div>
-      <button class="btn primary" data-action="add-notice">＋ Add Notice</button>
-    </div>
-    <div class="panel">
-      ${notices.length ? notices.slice().reverse().map(n => `
-        <div class="notice-card">
-          <span class="badge">${esc(n.category || "General")}</span>
-          <h3>${esc(n.title)}</h3>
-          <small class="muted">${esc(n.date)} · ${esc(n.audience || "All")}</small>
-          <p>${esc(n.details)}</p>
-          <button class="small-btn danger" data-action="delete-notice" data-id="${esc(n.id)}">Delete</button>
-        </div>`).join("") : `<div class="empty">No notices yet. Click “Add Notice” to create one.</div>`}
-    </div>`;
-}
-
-function renderReports() {
-  const students = read("students");
-  const teachers = read("teachers");
-  const fees = read("fees");
-  const results = read("results");
-  const attendance = read("attendance");
-  $("#view").innerHTML = `
-    <div class="section-head"><div><h2>Reports</h2><p class="muted">School overview and downloadable CSV reports.</p></div></div>
-    <div class="stats-grid">
-      <div class="stat-card"><small>Students</small><h2>${students.length}</h2></div>
-      <div class="stat-card"><small>Teachers</small><h2>${teachers.length}</h2></div>
-      <div class="stat-card"><small>Attendance Records</small><h2>${attendance.length}</h2></div>
-      <div class="stat-card"><small>Results</small><h2>${results.length}</h2></div>
-    </div>
-    <div class="panel">
-      <h3>Export Data</h3><br>
-      <div class="toolbar">
-        <button class="btn primary" data-action="export-students">Export Students CSV</button>
-        <button class="btn primary" data-action="export-teachers">Export Teachers CSV</button>
-        <button class="btn primary" data-action="export-fees">Export Fees CSV</button>
-        <button class="btn primary" data-action="export-attendance">Export Attendance CSV</button>
-      </div>
-      <p class="muted">CSV files can be opened in Excel or Google Sheets.</p>
-    </div>`;
-}
-
-function navigate(page) {
-  const pages = {
-    dashboard: ["Dashboard", renderDashboard],
-    students: ["Students", renderStudents],
-    teachers: ["Teachers", renderTeachers],
-    classes: ["Classes & Divisions", renderClasses],
-    attendance: ["Attendance", renderAttendance],
-    fees: ["Fees Management", renderFees],
-    results: ["Results", renderResults],
-    exams: ["Exams", renderExams],
-    notices: ["Notice Board", renderNotices],
-    reports: ["Reports", renderReports]
-  };
-
-  if (!pages[page]) page = "dashboard";
-  currentPage = page;
-  $("#pageTitle").textContent = pages[page][0];
-  $$(".nav").forEach(btn => btn.classList.toggle("active", btn.dataset.p === page));
-  pages[page][1]();
-
-  const view = $("#view");
-  view.classList.remove("animate-page");
-  void view.offsetWidth;
-  view.classList.add("animate-page");
-
-  $("#sidebar").classList.remove("open");
-  $("#overlay").classList.remove("show");
-}
-
-function showStudentForm(id = "") {
-  const s = id ? read("students").find(x => x.id === id) : {};
-  if (id && !s) return notify("Student not found.");
-  openModal(id ? "Edit Student" : "Add Student", studentForm(s));
-}
-
-function showTeacherForm(id = "") {
-  const t = id ? read("teachers").find(x => x.id === id) : {};
-  if (id && !t) return notify("Teacher not found.");
-
-  openModal(id ? "Edit Teacher" : "Add Teacher", `
-    <form id="teacherForm" class="form-grid">
-      <input type="hidden" name="id" value="${esc(t.id || "")}">
-      <div class="form-group"><label>Teacher Name *</label><input name="name" required value="${esc(t.name || "")}"></div>
-      <div class="form-group"><label>Class *</label><select name="className" required>${classOptions(t.className || "5th")}</select></div>
-      <div class="form-group"><label>Subject *</label><select name="subject" required>${SUBJECTS.map(s => `<option ${t.subject === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
-      <div class="form-group"><label>Email</label><input name="email" type="email" value="${esc(t.email || "")}"></div>
-      <div class="form-group"><label>Phone</label><input name="phone" value="${esc(t.phone || "")}"></div>
-      <div class="form-actions"><button class="btn primary">Save Teacher</button><button class="btn" type="button" id="cancelForm">Cancel</button></div>
-    </form>`);
-}
-
-function showExamForm() {
-  openModal("Add Exam", `
-    <form id="examForm" class="form-grid">
-      <div class="form-group full-width"><label>Exam Name</label><input name="examName" required placeholder="Unit Test 1"></div>
-      <div class="form-group"><label>Class</label><select name="className">${classOptions("5th")}</select></div>
-      <div class="form-group"><label>Subject</label><select name="subject">${SUBJECTS.map(s => `<option>${s}</option>`).join("")}</select></div>
-      <div class="form-group"><label>Date</label><input name="date" type="date" required></div>
-      <div class="form-group"><label>Time</label><input name="time" type="time" required></div>
-      <div class="form-group"><label>Duration (minutes)</label><input name="duration" type="number" min="1" value="60" required></div>
-      <div class="form-group"><label>Maximum Marks</label><input name="maxMarks" type="number" min="1" value="100" required></div>
-      <div class="form-actions"><button class="btn primary">Save Exam</button></div>
-    </form>`);
-}
-
-function showNoticeForm() {
-  openModal("Create Notice", `
-    <form id="noticeForm" class="form-grid">
-      <div class="form-group full-width"><label>Notice Title</label><input name="title" required></div>
-      <div class="form-group"><label>Category</label><select name="category"><option>General</option><option>Exam</option><option>Holiday</option><option>Event</option><option>Urgent</option></select></div>
-      <div class="form-group"><label>Audience</label><select name="audience"><option>All</option><option>Students</option><option>Teachers</option><option>Parents</option></select></div>
-      <div class="form-group full-width"><label>Details</label><textarea name="details" rows="4" required></textarea></div>
-      <div class="form-actions"><button class="btn primary">Publish Notice</button></div>
-    </form>`);
-}
-
-function exportCSV(name, data) {
-  if (!data.length) return notify("No records to export.");
-  const headers = [...new Set(data.flatMap(row => Object.keys(row)))];
-  const csv = [
-    headers.join(","),
-    ...data.map(row => headers.map(h => {
-      const val = String(row[h] ?? "").replace(/"/g, '""');
-      return `"${val}"`;
-    }).join(","))
-  ].join("\r\n");
-
-  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-  notify("CSV downloaded.");
-}
-
-document.addEventListener("submit", event => {
-  const form = event.target;
-  const data = Object.fromEntries(new FormData(form).entries());
-
-  if (form.id === "loginForm") {
-    event.preventDefault();
-    if (data.lu === "admin" && data.lp === "admin123") {
-      localStorage.setItem("sms_logged_in", "true");
-      $("#login").classList.add("hidden");
-      $("#app").classList.remove("hidden");
-      navigate("dashboard");
-      notify("Login successful!");
-    } else {
-      $("#loginErr").textContent = "Incorrect username or password.";
-    }
-  }
-
-  if (form.id === "studentForm") {
-    event.preventDefault();
-    let students = read("students");
-    const existing = data.id ? students.find(s => s.id === data.id) : null;
-
-    const student = {
-      ...existing,
-      ...data,
-      id: data.id || uid(),
-      rollNo: Number(data.rollNo),
-      status: existing?.status || "Active"
-    };
-
-    const duplicate = students.some(s =>
-      s.id !== student.id &&
-      s.className === student.className &&
-      s.division === student.division &&
-      Number(s.rollNo) === student.rollNo
-    );
-    if (duplicate) return notify("This roll number already exists in that division.");
-
-    if (data.id) students = students.map(s => s.id === data.id ? student : s);
-    else students.push(student);
-
-    save("students", students);
-    closeModal();
-    notify(data.id ? "Student updated!" : "Student added!");
-    navigate("students");
-  }
-
-  if (form.id === "teacherForm") {
-    event.preventDefault();
-    let teachers = read("teachers");
-    const existing = data.id ? teachers.find(t => t.id === data.id) : null;
-
-    if (!data.id && teachers.some(t => t.className === data.className)) {
-      return notify("A teacher is already assigned to this class. Edit that teacher instead.");
-    }
-
-    const teacher = { ...existing, ...data, id: data.id || uid() };
-    if (data.id) teachers = teachers.map(t => t.id === data.id ? teacher : t);
-    else teachers.push(teacher);
-
-    save("teachers", teachers);
-    closeModal();
-    notify("Teacher saved!");
-    navigate("teachers");
-  }
-
-  if (form.id === "attendanceForm") {
-    event.preventDefault();
-    const student = read("students").find(s => s.id === data.studentId);
-    const records = read("attendance");
-    records.push({
-      id: uid(),
-      date: data.date,
-      className: student?.className || data.className,
-      division: student?.division || data.division,
-      studentId: data.studentId,
-      status: data.status
-    });
-    save("attendance", records);
-    notify("Attendance saved!");
-    navigate("attendance");
-  }
-
-  if (form.id === "feeForm") {
-    event.preventDefault();
-    const total = Number(data.total);
-    const paid = Number(data.paid);
-    if (paid > total) return notify("Paid amount cannot exceed total fees.");
-
-    const student = read("students").find(s => s.id === data.studentId);
-    const fees = read("fees");
-    fees.push({
-      id: uid(),
-      studentId: data.studentId,
-      studentName: student?.name || "",
-      total,
-      paid
-    });
-    save("fees", fees);
-    notify("Fee record saved!");
-    navigate("fees");
-  }
-
-  if (form.id === "resultForm") {
-    event.preventDefault();
-    const keys = ["maths", "english", "science", "computer", "social"];
-    for (const k of keys) {
-      if (Number(data[k]) < 0 || Number(data[k]) > 100) return notify("Marks must be between 0 and 100.");
-    }
-    const results = read("results");
-    results.push({ id: uid(), ...data });
-    save("results", results);
-    notify("Result saved!");
-    navigate("results");
-  }
-
-  if (form.id === "examForm") {
-    event.preventDefault();
-    const exams = read("exams");
-    exams.push({ id: uid(), ...data });
-    save("exams", exams);
-    closeModal();
-    notify("Exam added!");
-    navigate("exams");
-  }
-
-  if (form.id === "noticeForm") {
-    event.preventDefault();
-    const notices = read("notices");
-    notices.push({ id: uid(), ...data, date: new Date().toISOString().slice(0, 10) });
-    save("notices", notices);
-    closeModal();
-    notify("Notice published!");
-    navigate("notices");
-  }
+document.addEventListener('click',e=>{
+ const navBtn=e.target.closest('[data-page]');if(navBtn&&navBtn.classList.contains('nav-item')){nav(navBtn.dataset.page);return;}
+ const btn=e.target.closest('[data-action]');if(!btn)return;
+ const {action,kind,id,key,page,tab}=btn.dataset;
+ if(action==='page')nav(page);
+ if(action==='add')openModal(kind);
+ if(action==='edit')openModal(kind,id);
+ if(action==='delete')deleteRecord(key,id);
+ if(action==='export')exportCSV(key);
+ if(action==='student-tab'){studentTab=tab;if(tab==='add'){render();}else render();}
+ if(action==='teacher-tab'){teacherTab=tab;render();}
 });
-
-document.addEventListener("click", event => {
-  const nav = event.target.closest("[data-p], [data-page]");
-  if (nav) {
-    event.preventDefault();
-    navigate(nav.dataset.p || nav.dataset.page);
-    return;
-  }
-
-  const actionEl = event.target.closest("[data-action]");
-  if (!actionEl) return;
-  const action = actionEl.dataset.action;
-  const id = actionEl.dataset.id;
-
-  switch (action) {
-    case "add-student": showStudentForm(); break;
-    case "edit-student": showStudentForm(id); break;
-
-    case "delete-student": {
-      if (!confirm("Delete this student?")) break;
-      save("students", read("students").filter(s => s.id !== id));
-      notify("Student deleted.");
-      navigate("students");
-      break;
-    }
-
-    case "add-teacher": showTeacherForm(); break;
-    case "edit-teacher": showTeacherForm(id); break;
-
-    case "delete-teacher": {
-      if (!confirm("Delete this teacher?")) break;
-      save("teachers", read("teachers").filter(t => t.id !== id));
-      notify("Teacher deleted.");
-      navigate("teachers");
-      break;
-    }
-
-    case "view-division":
-      currentStudentFilter = { className: actionEl.dataset.class, division: actionEl.dataset.division, search: "" };
-      navigate("students");
-      break;
-
-    case "reset-student-filter":
-      currentStudentFilter = { className: "All", division: "All", search: "" };
-      navigate("students");
-      break;
-
-    case "reset-teacher-filter":
-      currentTeacherFilter = { className: "All", search: "" };
-      navigate("teachers");
-      break;
-
-    case "add-exam": showExamForm(); break;
-
-    case "delete-exam": {
-      if (!confirm("Delete this exam?")) break;
-      save("exams", read("exams").filter(e => e.id !== id));
-      navigate("exams");
-      notify("Exam deleted.");
-      break;
-    }
-
-    case "add-notice": showNoticeForm(); break;
-
-    case "delete-notice": {
-      if (!confirm("Delete this notice?")) break;
-      save("notices", read("notices").filter(n => n.id !== id));
-      navigate("notices");
-      notify("Notice deleted.");
-      break;
-    }
-
-    case "export-students": exportCSV("students.csv", read("students")); break;
-    case "export-teachers": exportCSV("teachers.csv", read("teachers")); break;
-    case "export-fees": exportCSV("fees.csv", read("fees")); break;
-    case "export-attendance": exportCSV("attendance.csv", read("attendance")); break;
-  }
-
-  if (actionEl.id === "cancelForm") closeModal();
-});
-
-document.addEventListener("input", event => {
-  if (event.target.id === "studentSearch") {
-    currentStudentFilter.search = event.target.value;
-    renderStudents();
-    const input = $("#studentSearch");
-    input?.focus();
-    if (input) input.setSelectionRange(input.value.length, input.value.length);
-  }
-
-  if (event.target.id === "teacherSearch") {
-    currentTeacherFilter.search = event.target.value;
-    renderTeachers();
-    const input = $("#teacherSearch");
-    input?.focus();
-    if (input) input.setSelectionRange(input.value.length, input.value.length);
-  }
-});
-
-document.addEventListener("change", event => {
-  if (event.target.id === "studentClassFilter") {
-    currentStudentFilter.className = event.target.value;
-    if (currentStudentFilter.className === "All") currentStudentFilter.division = "All";
-    renderStudents();
-  }
-
-  if (event.target.id === "studentDivisionFilter") {
-    currentStudentFilter.division = event.target.value;
-    renderStudents();
-  }
-
-  if (event.target.id === "teacherClassFilter") {
-    currentTeacherFilter.className = event.target.value;
-    renderTeachers();
-  }
-});
-
-$("#mClose").addEventListener("click", closeModal);
-$("#modal").addEventListener("click", event => {
-  if (event.target.id === "modal") closeModal();
-});
-
-$("#menuBtn").addEventListener("click", () => {
-  $("#sidebar").classList.toggle("open");
-  $("#overlay").classList.toggle("show");
-});
-$("#overlay").addEventListener("click", () => {
-  $("#sidebar").classList.remove("open");
-  $("#overlay").classList.remove("show");
-});
-
-$("#logout").addEventListener("click", () => {
-  localStorage.removeItem("sms_logged_in");
-  $("#app").classList.add("hidden");
-  $("#login").classList.remove("hidden");
-  $("#lp").value = "";
-  $("#loginErr").textContent = "";
-});
-
-$("#today").textContent = dateToday();
-
+$('#mainNav').addEventListener('click',e=>{const b=e.target.closest('.nav-item');if(b)nav(b.dataset.page);});
+$('#menuToggle').addEventListener('click',()=>$('#sidebar').classList.toggle('open'));
+$('#logoutBtn').addEventListener('click',()=>{sessionStorage.removeItem('sms_logged_in');$('#app').classList.add('hidden');$('#loginScreen').classList.remove('hidden');});
+$('#loginForm').addEventListener('submit',e=>{e.preventDefault();const u=$('#loginUser').value.trim(),p=$('#loginPass').value; if(u==='admin'&&p==='admin123'){sessionStorage.setItem('sms_logged_in','1');$('#loginError').textContent='';$('#loginScreen').classList.add('hidden');$('#app').classList.remove('hidden');seedData();nav('dashboard');}else $('#loginError').textContent='Incorrect username or password. Try admin / admin123.';});
 seedData();
-
-if (localStorage.getItem("sms_logged_in") === "true") {
-  $("#login").classList.add("hidden");
-  $("#app").classList.remove("hidden");
-  navigate("dashboard");
-}
+if(sessionStorage.getItem('sms_logged_in')==='1'){$('#loginScreen').classList.add('hidden');$('#app').classList.remove('hidden');nav('dashboard');}
+})();
